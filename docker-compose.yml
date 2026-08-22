@@ -1,0 +1,141 @@
+services:
+  # ============================================
+  # FRONTEND — React + Vite (served by Nginx)
+  # Nginx proxies /api -> backend (no CORS needed)
+  # ============================================
+  frontend:
+    build:
+      context: ./lab-dms-frontend
+      dockerfile: Dockerfile
+      args:
+        # Relative URL: nginx proxies /api/v1 to the backend container
+        - VITE_API_URL=${VITE_API_URL:-/api/v1}
+    container_name: lab-dms-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - lab-dms-network
+    restart: unless-stopped
+
+  # ============================================
+  # BACKEND — Spring Boot 3.x (Java 21)
+  # ============================================
+  backend:
+    build:
+      context: ./lab-dms-backend
+      dockerfile: Dockerfile
+    container_name: lab-dms-backend
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/labdms
+      - SPRING_DATASOURCE_USERNAME=labdms
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION_MS=${JWT_EXPIRATION_MS:-900000}
+      - JWT_REFRESH_EXPIRATION_MS=${JWT_REFRESH_EXPIRATION_MS:-604800000}
+      # LaTeX runs in "local" mode: pdflatex is baked into the backend image.
+      # No docker.sock, no shared host paths — reliable on Windows/macOS/Linux.
+      - LATEX_MODE=${LATEX_MODE:-local}
+      - LATEX_DOCKER_IMAGE=lab-dms-latex:custom
+      - LATEX_TIMEOUT_SECONDS=${LATEX_TIMEOUT_SECONDS:-60}
+      - LATEX_MAX_MEMORY=${LATEX_MAX_MEMORY:-512m}
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILE:-dev}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - ATTACHMENTS_DIR=/app/attachments
+    volumes:
+      - attachments:/app/attachments
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - lab-dms-network
+    restart: unless-stopped
+
+  # ============================================
+  # DATABASE — PostgreSQL 16
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: lab-dms-postgres
+    environment:
+      - POSTGRES_DB=labdms
+      - POSTGRES_USER=labdms
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U labdms -d labdms"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lab-dms-network
+    # NOT exposed to host — only accessible within Docker network
+    restart: unless-stopped
+
+  # ============================================
+  # CACHE — Redis 7
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: lab-dms-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redisdata:/data
+    networks:
+      - lab-dms-network
+    # NOT exposed to host
+    restart: unless-stopped
+
+  # ============================================
+  # LATEX ENGINE — OPTIONAL (docker mode only)
+  # ============================================
+  # Only needed if you set LATEX_MODE=docker (ephemeral hardened containers
+  # spawned via the host docker.sock). The default "local" mode compiles
+  # inside the backend image and does not use this service.
+  # Enable with: docker compose --profile docker-latex up
+  latex-engine:
+    build:
+      context: ./lab-dms-latex
+      dockerfile: Dockerfile
+    image: lab-dms-latex:custom
+    container_name: lab-dms-latex-builder
+    entrypoint: ["echo", "LaTeX image built successfully"]
+    restart: "no"
+    profiles:
+      - docker-latex
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local
+  attachments:
+    driver: local
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  lab-dms-network:
+    driver: bridge
+    name: lab-dms-network

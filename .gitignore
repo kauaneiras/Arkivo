@@ -1,0 +1,121 @@
+# =============================================================================
+# Lab DMS
+#
+# Regra geral: entra no Git o que descreve COMO construir o sistema; fica de
+# fora o que é resultado de construí-lo, e tudo que é segredo ou dado real.
+# =============================================================================
+
+# --- Segredos e ambiente ------------------------------------------------------
+# O .env tem senha de banco, senha do Redis e a chave JWT. O .env.example fica
+# versionado justamente para que ninguém precise do .env de outra pessoa.
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Certificados e chaves, se algum dia entrarem no diretório
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+
+# --- Backend (Maven) ----------------------------------------------------------
+# Saída de compilação: classes, o .jar e os relatórios de teste. Reconstruído
+# por `mvn package`, então versionar só criaria conflito em cada build.
+target/
+!.mvn/wrapper/maven-wrapper.properties
+.mvn/wrapper/maven-wrapper.jar
+*.class
+# Relatórios de cobertura e de teste
+**/surefire-reports/
+**/jacoco.exec
+**/site/jacoco/
+
+# --- Frontend (Node/Vite) -----------------------------------------------------
+# O lab-dms-frontend tem o seu próprio .gitignore; estas regras cobrem a raiz e
+# qualquer pacote novo que apareça no futuro.
+node_modules/
+dist/
+dist-ssr/
+.vite/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Dados reais --------------------------------------------------------------
+# Backups gerados por scripts/backup.ps1: contêm documentos, anexos e usuários
+# do laboratório. Nunca vão para o Git.
+backups/
+*.dump
+*.sql.gz
+*.sql.bak
+# ATENÇÃO: NÃO ignorar "*.sql". As migrações do Flyway
+# (lab-dms-backend/src/main/resources/db/migration/) são .sql e PRECISAM estar
+# versionadas — sem elas, um clone novo sobe com o banco vazio.
+
+# Diretórios de dados quando o backend roda fora do Docker apontando para cá
+# (ATTACHMENTS_DIR). Dentro do Docker isto vive num volume nomeado.
+attachments/
+blobs/
+
+# --- Saída de scripts e diagnóstico ------------------------------------------
+# scripts/verificar-tudo.ps1 e scripts/diagnose.ps1 despejam o estado da
+# instalação, incluindo trechos de log com nomes de usuário.
+scripts/*.txt
+scripts/*.out
+verificacao.txt
+diagnostico.txt
+
+# --- LaTeX --------------------------------------------------------------------
+# Intermediários do pdflatex/latexmk. O PDF compilado também não entra: ele é
+# gerado a partir do .tex, que é a fonte de verdade do documento.
+*.aux
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.toc
+*.lof
+*.lot
+*.out
+*.bbl
+*.blg
+*.nav
+*.snm
+*.vrb
+# .latexmkrc é recusado pelo sistema por ser executado como Perl pelo latexmk;
+# não deve existir no repositório nem por acidente.
+.latexmkrc
+
+# --- Logs ---------------------------------------------------------------------
+*.log
+logs/
+
+# --- Temporários --------------------------------------------------------------
+tmp/
+temp/
+*.tmp
+*.bak
+*~
+
+# --- IDE ----------------------------------------------------------------------
+.idea/
+.vscode/
+!.vscode/extensions.json
+*.iml
+*.iws
+*.ipr
+.project
+.classpath
+.settings/
+*.swp
+*.swo
+
+# --- Sistema operacional ------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini

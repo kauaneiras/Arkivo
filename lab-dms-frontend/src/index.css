@@ -1,0 +1,151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+
+    /* Light theme (default). Values are "R G B" so Tailwind can apply opacity. */
+    --color-primary: 0 63 122;
+    --color-primary-dark: 0 43 84;
+    --color-primary-light: 51 101 149;
+    --color-secondary: 0 135 68;
+    --color-secondary-dark: 0 102 51;
+    --color-secondary-light: 51 159 105;
+
+    --color-background: 255 255 255;
+    --color-surface: 249 250 251;   /* panels */
+    --color-elevated: 255 255 255;  /* cards, modals — sits above the background */
+    --color-text-main: 17 24 39;
+    --color-text-muted: 107 114 128;
+    --color-border: 229 231 235;
+  }
+
+  /* Dark theme. Brand colours are lightened so they keep enough contrast
+     against a dark background (the deep navy primary is unreadable there). */
+  .dark {
+    --color-primary: 96 165 250;
+    --color-primary-dark: 59 130 246;
+    --color-primary-light: 147 197 253;
+    --color-secondary: 52 211 153;
+    --color-secondary-dark: 16 185 129;
+    --color-secondary-light: 110 231 183;
+
+    --color-background: 17 24 39;
+    --color-surface: 24 33 47;
+    --color-elevated: 31 41 55;
+    --color-text-main: 243 244 246;
+    --color-text-muted: 156 163 175;
+    --color-border: 55 65 81;
+  }
+
+  body {
+    @apply bg-background text-textMain antialiased font-sans;
+  }
+
+  /* Native controls (scrollbars, date pickers, autofill) follow the theme */
+  .dark {
+    color-scheme: dark;
+  }
+}
+
+@layer components {
+  /* Clean component styles matching the premium brand */
+  .card {
+    @apply bg-elevated border border-borderLight rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow duration-300;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-white px-4 py-2 rounded-md font-medium hover:bg-primary-dark transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm;
+  }
+
+  .btn-secondary {
+    @apply bg-secondary text-white px-4 py-2 rounded-md font-medium hover:bg-secondary-dark transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm;
+  }
+
+  .btn-outline {
+    @apply border border-borderLight bg-elevated text-textMain px-4 py-2 rounded-md font-medium hover:bg-surface transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-borderLight shadow-sm;
+  }
+
+  .input-field {
+    @apply w-full border border-borderLight rounded-md px-3 py-2 text-textMain bg-elevated focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 shadow-sm placeholder:text-textMuted;
+  }
+
+}
+
+/* Buttons keep white text on the brand colours in light mode, but the dark
+   palette lightens those colours — dark text reads better on them.
+   Written as plain CSS, not @apply: the dark-mode remap of .text-gray-900
+   further down would otherwise make Tailwind see a circular dependency. */
+.dark .btn-primary,
+.dark .btn-secondary {
+  color: rgb(17 24 39);
+}
+
+/* ------------------------------------------------------------------ */
+/* Dark-mode fallbacks for hard-coded utility colours.                  */
+/* The screens were written before dark mode existed and use literals   */
+/* like bg-white / bg-gray-50 / text-gray-* in many places. Remapping    */
+/* them here fixes every screen at once, instead of editing hundreds of  */
+/* class lists (and missing some).                                       */
+/* ------------------------------------------------------------------ */
+.dark .bg-white { background-color: rgb(var(--color-elevated)); }
+.dark .bg-gray-50,
+.dark .bg-gray-100 { background-color: rgb(var(--color-surface)); }
+.dark .bg-gray-200 { background-color: rgb(var(--color-border)); }
+.dark .hover\:bg-gray-50:hover,
+.dark .hover\:bg-gray-100:hover { background-color: rgb(var(--color-surface)); }
+
+.dark .text-gray-700,
+.dark .text-gray-800,
+.dark .text-gray-900 { color: rgb(var(--color-text-main)); }
+.dark .text-gray-400,
+.dark .text-gray-500,
+.dark .text-gray-600 { color: rgb(var(--color-text-muted)); }
+
+.dark .border-gray-200,
+.dark .border-gray-300 { border-color: rgb(var(--color-border)); }
+
+/* Tinted status surfaces (badges, banners) are far too bright on a dark
+   background; dim them while keeping the hue that carries the meaning. */
+.dark .bg-blue-50   { background-color: rgb(30 58 138 / 0.35); }
+.dark .bg-green-50  { background-color: rgb(6 78 59 / 0.40); }
+.dark .bg-red-50    { background-color: rgb(127 29 29 / 0.35); }
+.dark .bg-amber-50,
+.dark .bg-yellow-50 { background-color: rgb(120 53 15 / 0.35); }
+.dark .bg-purple-50 { background-color: rgb(76 29 149 / 0.35); }
+
+.dark .text-blue-700, .dark .text-blue-800   { color: rgb(147 197 253); }
+.dark .text-green-700, .dark .text-green-800 { color: rgb(110 231 183); }
+.dark .text-red-600, .dark .text-red-700, .dark .text-red-800 { color: rgb(252 165 165); }
+.dark .text-amber-700, .dark .text-yellow-800 { color: rgb(253 224 71); }
+.dark .text-purple-600 { color: rgb(196 181 253); }
+
+.dark .border-blue-200  { border-color: rgb(30 64 175 / 0.6); }
+.dark .border-green-200 { border-color: rgb(6 95 70 / 0.6); }
+.dark .border-red-100,
+.dark .border-red-200   { border-color: rgb(153 27 27 / 0.6); }
+.dark .border-amber-200 { border-color: rgb(146 64 14 / 0.6); }
+
+/* The PDF preview pane is a light grey sheet holder in light mode */
+.dark .bg-gray-100.flex { background-color: rgb(var(--color-surface)); }
+
+/* Animations */
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-slide-up {
+  animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

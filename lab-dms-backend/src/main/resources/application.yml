@@ -1,0 +1,89 @@
+spring:
+  application:
+    name: lab-dms-backend
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/labdms}
+    username: ${SPRING_DATASOURCE_USERNAME:labdms}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: true
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
+
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
+
+  servlet:
+    multipart:
+      # Must not be below ProjectImportService.MAX_FILE_BYTES (50 MB): Tomcat
+      # rejects an oversized upload before the handler runs, so a lower value
+      # here silently overrides the limit the code checks and the UI advertises.
+      # A figure-heavy Overleaf export could not be imported at all.
+      max-file-size: ${MAX_FILE_SIZE:50MB}
+      max-request-size: ${MAX_REQUEST_SIZE:55MB}
+
+jwt:
+  secret: ${JWT_SECRET:dGhpcy1pcy1hLXZlcnktc2VjdXJlLWtleS1mb3ItZGV2ZWxvcG1lbnQtb25seS1kby1ub3QtdXNlLWluLXByb2R1Y3Rpb24=}
+  expiration-ms: ${JWT_EXPIRATION_MS:900000}
+  refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
+
+labdms:
+  review-reminder:
+    # ISO/IEC 17025 8.3.2 b) — daily sweep for documents due for periodic review.
+    # The zone is explicit because the container runs in UTC: without it, 07:00
+    # would fire at 04:00 local time in Brazil.
+    cron: ${REVIEW_REMINDER_CRON:0 0 7 * * *}
+    zone: ${REVIEW_REMINDER_ZONE:America/Sao_Paulo}
+
+attachments:
+  # External files (calibration certificates, photos) attached to documents.
+  # Mounted as a persistent Docker volume in production.
+  storage-dir: ${ATTACHMENTS_DIR:/app/attachments}
+
+latex:
+  # local  = run pdflatex inside this process (default in Docker image)
+  # docker = spawn hardened ephemeral containers via host docker.sock
+  # auto   = local if pdflatex is on PATH, otherwise docker
+  mode: ${LATEX_MODE:auto}
+  docker-image: ${LATEX_DOCKER_IMAGE:lab-dms-latex:custom}
+  timeout-seconds: ${LATEX_TIMEOUT_SECONDS:60}
+  max-memory: ${LATEX_MAX_MEMORY:512m}
+  # How many TeX processes may run at once. Each is CPU/RAM heavy; unbounded
+  # parallelism turns a few simultaneous previews into cascading timeouts.
+  max-concurrent: ${LATEX_MAX_CONCURRENT:2}
+  cache-size: ${LATEX_CACHE_SIZE:32}
+
+server:
+  port: ${BACKEND_PORT:8080}
+  error:
+    include-message: always
+    include-binding-errors: always
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
