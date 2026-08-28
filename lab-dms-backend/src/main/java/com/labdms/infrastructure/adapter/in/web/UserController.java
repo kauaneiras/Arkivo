@@ -252,6 +252,178 @@ public class UserController {
             .collect(Collectors.toList()));
     }
 
+    /* ------------------------- ativar / desativar ------------------------- */
+
+    /**
+     * Desativa ou reativa uma conta.
+     *
+     * <p>Desativar é a forma normal de tirar alguém do sistema: a conta perde o
+     * acesso e o nome continua a aparecer em cada documento que escreveu e em
+     * cada linha de auditoria que gerou. É o que a ISO 17025 exige — saber quem
+     * redigiu e quem aprovou não pode depender de a pessoa ainda trabalhar cá.
+     *
+     * <p>Duas recusas propositadas, ambas sobre o mesmo risco de o laboratório
+     * ficar sem quem administre: ninguém se desativa a si próprio, e o último
+     * administrador ativo não pode ser desativado.
+     */
+    @PutMapping("/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Activate or deactivate a user (Admin only)")
+    public ResponseEntity<?> setStatus(
+            @PathVariable UUID id,
+            @RequestBody StatusRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal
+                    com.labdms.infrastructure.security.UserPrincipal principal) {
+
+        String target = request.status() == null ? "" : request.status().toUpperCase();
+        if (!target.equals("ACTIVE") && !target.equals("INACTIVE")) {
+            return ResponseEntity.badRequest().body(new MessageDto(
+                    "Estado inválido. Use ACTIVE ou INACTIVE."));
+        }
+
+        UserJpaEntity user = userRepository.findById(id).orElse(null);
+        if (user == null) return ResponseEntity.notFound().build();
+
+        if (target.equals("INACTIVE")) {
+            if (id.equals(principal.getId())) {
+                return ResponseEntity.badRequest().body(new MessageDto(
+                        "Você não pode desativar a sua própria conta."));
+            }
+            if (isLastActiveAdmin(id)) {
+                return ResponseEntity.badRequest().body(new MessageDto(
+                        "Esta é a última conta de administrador ativa. Promova outra pessoa "
+                        + "a administrador antes de desativar esta, ou o sistema fica sem quem o administre."));
+            }
+        }
+
+        user.setStatus(target);
+        userRepository.save(user);
+        return ResponseEntity.ok(new MessageDto(target.equals("ACTIVE")
+                ? "Conta reativada." : "Conta desativada."));
+    }
+
+    /**
+     * Apaga a conta — só quando não há nada a perder.
+     *
+     * <p>Uma conta que já escreveu, aprovou ou sequer tocou no sistema deixou
+     * rasto, e apagá-la transformaria esse rasto em "autor desconhecido". Por
+     * isso a remoção só é permitida a contas sem histórico nenhum; para as
+     * outras, a resposta explica que o caminho é desativar.
+     *
+     * <p>A verificação é feita por contagem em cada tabela que aponta para o
+     * utilizador, e não confiando na chave estrangeira: uma FK sem ON DELETE
+     * avisaria com um erro de base de dados que ninguém consegue interpretar.
+     */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Delete a user with no history (Admin only)")
+    public ResponseEntity<?> deleteUser(
+            @PathVariable UUID id,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal
+                    com.labdms.infrastructure.security.UserPrincipal principal) {
+
+        if (userRepository.findById(id).isEmpty()) return ResponseEntity.notFound().build();
+
+        if (id.equals(principal.getId())) {
+            return ResponseEntity.badRequest().body(new MessageDto(
+                    "Você não pode apagar a sua própria conta."));
+        }
+        if (isLastActiveAdmin(id)) {
+            return ResponseEntity.badRequest().body(new MessageDto(
+                    "Esta é a última conta de administrador ativa e não pode ser apagada."));
+        }
+
+        long history = countHistory(id);
+        if (history > 0) {
+            return ResponseEntity.badRequest().body(new MessageDto(
+                    "Esta conta tem " + history + " registo(s) no sistema (documentos, versões, "
+                    + "revisões ou auditoria) e apagá-la deixaria esse histórico sem responsável. "
+                    + "Desative-a: o acesso é retirado e o histórico fica intacto."));
+        }
+
+        jdbcTemplate.update("DELETE FROM user_roles WHERE user_id = ?", id);
+        jdbcTemplate.update("DELETE FROM notifications WHERE user_id = ?", id);
+        userRepository.deleteById(id);
+        return ResponseEntity.ok(new MessageDto("Conta apagada."));
+    }
+
+    /** Quantos registos ficariam órfãos se esta conta desaparecesse. */
+    private long countHistory(UUID userId) {
+        long total = 0;
+        // Cada par é tabela + coluna que aponta para o utilizador. Uma tabela que
+        // ainda não exista nesta instalação é ignorada em vez de rebentar.
+        String[][] refs = {
+                {"documents", "created_by"}, {"commits", "author_id"},
+                {"reviews", "reviewer_id"}, {"audit_log", "user_id"},
+                {"document_access", "user_id"}, {"document_acknowledgements", "user_id"},
+                {"document_group_members", "user_id"},
+        };
+        for (String[] ref : refs) {
+            try {
+                Integer n = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM " + ref[0] + " WHERE " + ref[1] + " = ?",
+                        Integer.class, userId);
+                if (n != null) total += n;
+            } catch (org.springframework.dao.DataAccessException ignored) {
+                // Tabela ou coluna ausente nesta versão do esquema.
+            }
+        }
+        return total;
+    }
+
+    private boolean isLastActiveAdmin(UUID userId) {
+        Integer othersActive = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM users u
+                  JOIN user_roles ur ON ur.user_id = u.id
+                  JOIN roles r ON r.id = ur.role_id
+                 WHERE r.name = 'ROLE_ADMIN' AND u.status = 'ACTIVE' AND u.id <> ?
+                """, Integer.class, userId);
+        Integer isAdmin = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM user_roles ur
+                  JOIN roles r ON r.id = ur.role_id
+                 WHERE r.name = 'ROLE_ADMIN' AND ur.user_id = ?
+                """, Integer.class, userId);
+        return isAdmin != null && isAdmin > 0 && (othersActive == null || othersActive == 0);
+    }
+
+    /* ----------------------------- idioma ----------------------------- */
+
+    /**
+     * Guarda o idioma da própria conta.
+     *
+     * <p>Sem {@code @PreAuthorize} de administrador de propósito: isto é a
+     * preferência de quem está autenticado, sobre a própria conta, e o
+     * identificador vem do token — não de um parâmetro que se possa trocar.
+     */
+    @PutMapping("/me/language")
+    @Operation(summary = "Save the signed-in user's preferred language")
+    public ResponseEntity<?> setMyLanguage(
+            @RequestBody LanguageRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal
+                    com.labdms.infrastructure.security.UserPrincipal principal) {
+
+        String lang = request.language() == null ? "" : request.language().toLowerCase();
+        if (!List.of("pt", "en", "fr", "de", "zh", "es").contains(lang)) {
+            return ResponseEntity.badRequest().body(new MessageDto("Idioma não suportado: " + lang));
+        }
+        jdbcTemplate.update("UPDATE users SET preferred_language = ? WHERE id = ?",
+                lang, principal.getId());
+        return ResponseEntity.ok(new MessageDto(lang));
+    }
+
+    @GetMapping("/me/language")
+    @Operation(summary = "Read the signed-in user's preferred language")
+    public ResponseEntity<?> getMyLanguage(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal
+                    com.labdms.infrastructure.security.UserPrincipal principal) {
+        List<String> found = jdbcTemplate.query(
+                "SELECT preferred_language FROM users WHERE id = ?",
+                (rs, n) -> rs.getString(1), principal.getId());
+        return ResponseEntity.ok(new MessageDto(found.isEmpty() ? null : found.get(0)));
+    }
+
+    public record StatusRequest(String status) {}
+    public record LanguageRequest(String language) {}
     public record UserDto(UUID id, String email, String fullName, String status, String role) {}
     public record ApproveRequest(String roleName) {}
     public record UpdateRolesRequest(List<String> roleNames) {}

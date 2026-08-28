@@ -174,6 +174,29 @@ public class LatexCompilationService implements CompileLatexUseCase {
     /** Name given to the root when the project has assets but no .tex of its own. */
     private static final String SYNTHETIC_ROOT = "main.tex";
 
+    /**
+     * The text to compile: the unsaved editor buffer when there is one, otherwise
+     * the text stored with the version.
+     *
+     * <p>Both are sanitized the same way, so this is the only place that decides
+     * "what is the source right now" for a document without a project tree.
+     * Returns an empty string when neither exists — the sanitizer then reports a
+     * genuinely empty document, which at that point is the truth.
+     */
+    private String sourceOrSaved(java.util.UUID commitId, String editedContent) {
+        if (editedContent != null && !editedContent.isBlank()) {
+            return InputSanitizer.sanitizeLatex(editedContent);
+        }
+        // Optional.map already collapses a null snapshot id to empty, so a version
+        // that never had a snapshot falls through to "" without a null check.
+        String saved = commitRepository.findById(commitId)
+                .map(Commit::getContentSnapshotId)
+                .flatMap(contentSnapshotRepository::findById)
+                .map(ContentSnapshot::getLatexSource)
+                .orElse("");
+        return InputSanitizer.sanitizeLatex(saved);
+    }
+
     /** The file to compile, or {@code null} when the tree has no .tex at all. */
     private String resolveRoot(java.util.List<ProjectFileService.ProjectFile> files) {
         return files.stream().filter(ProjectFileService.ProjectFile::isRoot)
@@ -217,17 +240,23 @@ public class LatexCompilationService implements CompileLatexUseCase {
 
         var files = projectFiles.listFiles(commitId);
         if (files.isEmpty()) {
-            return latexCompilerPort.compile(InputSanitizer.sanitizeLatex(
-                    editedContent == null ? "" : editedContent));
+            // A single-file document keeps its text in the version's snapshot and
+            // has no project tree at all — which is exactly what a document looks
+            // like the moment it is created. Previewing it with no unsaved buffer
+            // used to compile an empty string and answer "LaTeX source cannot be
+            // empty", so a brand-new document failed to render until its first
+            // edit. Falling back to the saved text mirrors what compiling the
+            // version already does.
+            return latexCompilerPort.compile(sourceOrSaved(commitId, editedContent));
         }
 
         String resolved = resolveRoot(files);
 
         // Assets uploaded into a document that has no .tex in its tree yet: the
-        // editor buffer becomes the root, written alongside them.
+        // editor buffer becomes the root, written alongside them — or, with no
+        // buffer to use, the version's saved text, for the same reason as above.
         if (resolved == null) {
-            final String body = InputSanitizer.sanitizeLatex(
-                    editedContent == null ? "" : editedContent);
+            final String body = sourceOrSaved(commitId, editedContent);
             return latexCompilerPort.compileProject(
                     "preview:" + commitId + ":" + projectFiles.treeFingerprint(commitId)
                             + ":synthetic:" + sha256(body),

@@ -6,6 +6,8 @@ import { Plus, Search, Edit3, Archive, FileText, History, AlertTriangle, Downloa
 import CreateDocumentModal from './CreateDocumentModal';
 import { useI18n, formatDate } from '../../lib/i18n';
 import { DocStatusBadge, ConfirmModal, EmptyState, TableSkeleton, useToast } from '../../components/ui';
+import { useAuthStore } from '../../store/authStore';
+import { cn } from '../../lib/utils';
 
 const DOC_TYPES = ['IT', 'PQ', 'PO', 'MQ'];
 const DOC_STATUSES = ['DRAFT', 'IN_REVIEW', 'ACTIVE', 'OBSOLETE'];
@@ -15,6 +17,9 @@ export default function DocumentsPage() {
   const [visibilityOf, setVisibilityOf] = useState<any | null>(null);
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // Espelho da regra do servidor, não a regra em si: quem não tem a permissão
+  // também é recusado pelo endpoint. Aqui só evitamos oferecer o que vai falhar.
+  const canCreate = useAuthStore((s) => s.can('DOCUMENT_CREATE'));
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -120,9 +125,20 @@ export default function DocumentsPage() {
             <Download className="w-4 h-4" />
             <span className="hidden lg:inline">{t('docs.exportMasterList')}</span>
           </button>
+          {/* Desativado, não escondido.
+              Um botão que desaparece deixa a pessoa a procurar uma função que
+              lhe disseram existir; um botão apagado que explica o motivo ao
+              passar o rato responde à pergunta sem ela ter de perguntar a
+              ninguém. `disabled` também tira o elemento da navegação por
+              teclado, então não é só o rato que fica impedido. */}
           <button
             onClick={() => setIsModalOpen(true)}
-            className="btn-primary flex items-center gap-2"
+            disabled={!canCreate}
+            title={canCreate ? undefined : t('docs.newDenied')}
+            className={cn(
+              'btn-primary flex items-center gap-2',
+              !canCreate && 'opacity-50 cursor-not-allowed',
+            )}
           >
             <Plus className="w-4 h-4" />
             {t('docs.new')}

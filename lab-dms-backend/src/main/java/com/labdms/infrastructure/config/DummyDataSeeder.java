@@ -18,31 +18,57 @@ import java.util.UUID;
 @Profile("!test") // Run in non-test profiles
 public class DummyDataSeeder implements CommandLineRunner {
 
+    private static final org.slf4j.Logger logger =
+            org.slf4j.LoggerFactory.getLogger(DummyDataSeeder.class);
+
     private final JdbcTemplate jdbcTemplate;
     private final PasswordEncoder passwordEncoder;
     private final String attachmentsDir;
+    private final boolean seedDemoDocuments;
 
     public DummyDataSeeder(JdbcTemplate jdbcTemplate, PasswordEncoder passwordEncoder,
-                           @Value("${attachments.storage-dir:/app/attachments}") String attachmentsDir) {
+                           @Value("${attachments.storage-dir:/app/attachments}") String attachmentsDir,
+                           @Value("${seed.demo-documents:false}") boolean seedDemoDocuments) {
         this.jdbcTemplate = jdbcTemplate;
         this.passwordEncoder = passwordEncoder;
         this.attachmentsDir = attachmentsDir;
+        this.seedDemoDocuments = seedDemoDocuments;
     }
 
+    /**
+     * People and configuration are seeded always; example documents are not.
+     *
+     * <p>The demo documents used to be created on every start, which quietly
+     * undid any attempt to begin from a clean slate: the migration that empties
+     * the document tables ran first, and this put eight example documents
+     * straight back. Anyone wiping the data to start their own work found the
+     * examples waiting for them again and reasonably concluded the wipe had not
+     * worked.
+     *
+     * <p>Set {@code SEED_DEMO_DOCUMENTS=true} to get them back for a demo.
+     */
     @Override
     public void run(String... args) throws Exception {
         seedPermissionsAndRoles();
         seedUsers();
         seedDocumentGroups();
-        seedDummyDocuments();
-        seedAttachments();
-        seedNotifications();
+
+        if (seedDemoDocuments) {
+            logger.info("Seeding example documents (seed.demo-documents=true)");
+            seedDummyDocuments();
+            seedAttachments();
+            seedNotifications();
+        } else {
+            logger.info("Example documents not seeded — the laboratory starts with its own. "
+                    + "Set SEED_DEMO_DOCUMENTS=true to load the examples.");
+        }
     }
 
     private void seedPermissionsAndRoles() {
         // Core permissions
         String[] permissions = {
-            "DOCUMENT_VIEW_ALL", "DOCUMENT_EDIT_ALL", "DOCUMENT_EDIT", "DOCUMENT_DELETE", "REVIEW_APPROVE"
+            "DOCUMENT_VIEW_ALL", "DOCUMENT_EDIT_ALL", "DOCUMENT_CREATE", "DOCUMENT_EDIT",
+            "DOCUMENT_DELETE", "REVIEW_APPROVE"
         };
         for (String perm : permissions) {
             jdbcTemplate.update("INSERT INTO permissions (id, code, description) VALUES (?, ?, ?) ON CONFLICT (code) DO NOTHING",
@@ -61,9 +87,14 @@ public class DummyDataSeeder implements CommandLineRunner {
         }
 
         // ROLE_EDITOR: create/edit documents in own groups
+        grantPermission(roleEditorId, "DOCUMENT_CREATE");
         grantPermission(roleEditorId, "DOCUMENT_EDIT");
 
-        // ROLE_REVIEWER: view everything, edit, and approve reviews
+        // ROLE_REVIEWER: view everything, edit, and approve reviews.
+        //
+        // Deliberately WITHOUT DOCUMENT_CREATE: whoever approves does not write.
+        // That separation is the point of having a reviewer at all, and ISO 17025
+        // 8.3 expects the review of a document to be somebody else's act.
         grantPermission(roleReviewerId, "DOCUMENT_VIEW_ALL");
         grantPermission(roleReviewerId, "DOCUMENT_EDIT");
         grantPermission(roleReviewerId, "REVIEW_APPROVE");
@@ -87,7 +118,23 @@ public class DummyDataSeeder implements CommandLineRunner {
         seedUser("admin@email.com", "Administrador", "ROLE_ADMIN", encodedPassword);
         seedUser("writer@email.com", "Escritor de Documentos", "ROLE_EDITOR", encodedPassword);
         seedUser("reviewer@email.com", "Revisor da Qualidade", "ROLE_REVIEWER", encodedPassword);
+        seedUser("member@email.com", "Membro do Laboratório", "ROLE_VIEWER", encodedPassword);
         seedUser("reader@email.com", "Leitor", "ROLE_VIEWER", encodedPassword);
+
+        // The demo password is reset on every start, on purpose: these accounts
+        // exist to evaluate the system, and a half-finished experiment that left
+        // one of them with an unknown password used to end with somebody editing
+        // password hashes by hand. Only these four seeded addresses are touched —
+        // a real user created through the interface is never reset.
+        resetSeedPasswords(encodedPassword);
+    }
+
+    private void resetSeedPasswords(String encodedPassword) {
+        jdbcTemplate.update("""
+                UPDATE users SET password_hash = ?, status = 'ACTIVE'
+                 WHERE email IN ('admin@email.com', 'writer@email.com',
+                                 'reviewer@email.com', 'member@email.com', 'reader@email.com')
+                """, encodedPassword);
     }
 
     private void seedUser(String email, String fullName, String roleName, String encodedPassword) {

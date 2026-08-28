@@ -1,0 +1,127 @@
+============================================== 
+ LAB DMS - teste rapido da API                 
+ 24/08/2026 21:03:25,57                                 
+============================================== 
+ 
+[1] SAUDE DO BACKEND 
+   health: 200 
+ 
+[2] LOGIN admin@email.com / 123456 
+   http: 200 
+   token obtido 
+ 
+[3] CRIANDO UM DOCUMENTO COM FONTE LATEX 
+   http: 201 
+{"id":"65522d64-b684-48a7-aa1b-f66ef15ea17e","code":"PO-001","title":"Teste automatico do visualizador","docType":"PO","documentGroupId":null,"currentCommitId":"bfddeb3a-5bb0-4daf-844a-86b56dec45a2","officialCommitId":"bfddeb3a-5bb0-4daf-844a-86b56dec45a2","assignedReviewerId":null,"status":"DRAFT","createdBy":"1b2dcc85-06e7-4334-8fd2-8bc1786e48c8","tags":[],"reviewIntervalMonths":24,"nextReviewDate":"2028-08-25","lastReviewedAt":null,"reviewOverdue":false,"retentionYears":5,"createdAt":"2026-08-25T00:03:25.493718152Z","updatedAt":"2026-08-25T00:03:25.516791636Z"} 
+   commit atual: bfddeb3a-5bb0-4daf-844a-86b56dec45a2 
+ 
+[4] PRE-VISUALIZACAO DO PROJETO  (o que o editor chama em Compilar) 
+   http: 400 
+   NAO E UM PDF (63 bytes):
+{"code":"BAD_REQUEST","message":"LaTeX source cannot be empty"}
+   --- cabecalhos --- 
+HTTP/1.1 400 
+Vary: Origin
+Vary: Access-Control-Request-Method
+Vary: Access-Control-Request-Headers
+X-Content-Type-Options: nosniff
+X-XSS-Protection: 0
+Cache-Control: no-cache, no-store, max-age=0, must-revalidate
+Pragma: no-cache
+Expires: 0
+X-Frame-Options: DENY
+Content-Type: application/json
+Transfer-Encoding: chunked
+Date: Tue, 25 Aug 2026 00:03:25 GMT
+Connection: close
+
+ 
+[5] COMPILAR E GRAVAR 
+   http: 200 
+{"id":"647eba54-e23b-4184-b720-738751dde1fa","commitId":"bfddeb3a-5bb0-4daf-844a-86b56dec45a2","status":"SUCCESS","compilationLog":"...(truncated)...\n2021/07/09 v1.2t Portuguese support from the babel system\nPackage babel Info: Hyphen rules for 'brazil' set to \\l@portuguese\n(babel)             (\\language4). Reported on input line 111.\nPackage babel Info: Making \" an active character on input line 143.\n)) (/usr/share/texlive/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def\nFile: l3backend-pdftex.def 2022-01-12 L3 backend support: PDF output (pdfTeX)\n\\l__color_backend_stack_int=\\count195\n\\l__pdf_internal_box=\\box50\n) (./document.aux)\n\\openout1 = `document.aux'.\n\nLaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 6.\nLaTeX Font Info:    ... okay on input line 6.\nLaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 6.\nLaTeX Font Info:    ... okay on input line 6.\nLaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 6.\nLaTeX Font Info:    ... okay on input line 6.\nLaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 6.\nLaTeX Font Info:    ... okay on input line 6.\nLaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 6.\nLaTeX Font Info:    ... okay on input line 6.\nLaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 6.\nLaTeX Font Info:    ... okay on input line 6.\nLaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 6.\nLaTeX Font Info:    ... okay on input line 6.\nLaTeX Font Info:    External font `cmex10' loaded for size\n(Font)              <14.4> on input line 7.\nLaTeX Font Info:    External font `cmex10' loaded for size\n(Font)              <7> on input line 7.\n\n\nLaTeX Warning: No \\author given.\n\n[1\n\n{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}] (./document.aux) ) \nHere is how much of TeX's memory you used:\n 1631 strings out of 480154\n 26883 string characters out of 5893788\n 325891 words of memory out of 5000000\n 19643 multiletter control sequences out of 15000+600000\n 474319 words of font info for 37 fonts, out of 8000000 for 9000\n 61 hyphenation exceptions out of 8191\n 40i,6n,52p,184b,197s stack positions out of 5000i,500n,10000p,200000b,80000s\n </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1200.600pk> </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1728.600pk> </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1440.600pk> </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm2074.600pk>\nOutput written on document.pdf (1 page, 26424 bytes).\nPDF statistics:\n 101 PDF objects out of 1000 (max. 8388607)\n 20 compressed objects within 1 object stream\n 0 named destinations out of 1000 (max. 500000)\n 1 words of extra memory for PDF output out of 10000 (max. 10000000)\n\n\nRc files read:\n  NONE\nLatexmk: This is Latexmk, John Collins, 20 November 2021, version: 4.76.\nRule 'pdflatex': File changes, etc:\n   Changed files, or newly in use since previous run(s):\n      './document.tex'\n------------\nRun number 1 of rule 'pdflatex'\n------------\n------------\nRunning 'pdflatex  -interaction=nonstopmode -no-shell-escape -file-line-error -recorder  \"./document.tex\"'\n------------\nLatexmk: applying rule 'pdflatex'...\nThis is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex)\nentering extended mode\n(./document.tex\nLaTeX2e <2021-11-15> patch level 1\nL3 programming layer <2022-01-21> (/usr/share/texlive/texmf-dist/tex/latex/base/article.cls\nDocument Class: article 2021/10/04 v1.4n Standard LaTeX document class\n(/usr/share/texlive/texmf-dist/tex/latex/base/size12.clo)) (/usr/share/texlive/texmf-dist/tex/latex/base/inputenc.sty) (/usr/share/texlive/texmf-dist/tex/latex/base/fontenc.sty) (/usr/share/texlive/texmf-dist/tex/generic/babel/babel.sty (/usr/share/texlive/texmf-dist/tex/generic/babel/txtbabel.def) (/usr/share/texlive/texmf-dist/tex/generic/babel-portuges/brazil.ldf)) (/usr/share/texlive/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def) (./document.aux)\n\nLaTeX Warning: No \\author given.\n\n[1{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}] (./document.aux)\nkpathsea: Running mktexpk --mfmode / --bdpi 600 --mag 1+0/600 --dpi 600 ecrm1200\nmktexpk: Running mf-nowin -progname=mf \\mode:=ljfour; mag:=1+0/600; nonstopmode; input ecrm1200\nThis is METAFONT, Version 2.71828182 (TeX Live 2022/dev/Debian) (preloaded base=mf)\n\n(/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/ecrm1200.mf (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exbase.mf) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/ecrm.mf (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exroman.mf\n Ok (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exaccess.mf\n Ok) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/expseudo.mf\n Ok) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exruwest.mf\n Ok [192] [193] [194] [195] [196] [197] [198] [199] [200] [201] [202] [203] [204] [205] [206] [207] [208] [209] [210] [211] [212] [213] [214] [215] [216] [217] [218] [219] [220] [221] [222] [223]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrlwest.mf\n Ok [224] [225] [226] [227] [228] [229] [230] [231] [232] [233] [234] [235] [236] [237] [238] [239] [240] [241] [242] [243] [244] [245] [246] [247] [248] [249] [250] [251] [252] [253] [254] [255]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrueast.mf\n Ok [128] [129] [130] [131] [132] [133] [134] [135] [136] [137] [138] [139] [140] [141] [142] [143] [144] [145] [146] [147] [148] [149] [150] [151] [152] [153] [154] [155] [156] [157]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrleast.mf\n Ok [158] [160] [161] [162] [163] [164] [165] [166] [167] [168] [169] [170] [171] [172] [173] [174] [175] [176] [177] [178] [179] [180] [181] [182] [183] [184] [185] [186] [187] [188]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exbraces.mf\n Ok [94] [126] [23] [40] [41] [60] [124] [62] [91] [93] [92] [123] [125] [95] [127] [32]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/expunct.mf\n Ok [14] [15] [19] [20] [13] [18] [33] [39] [42] [43] [44] [46] [47] [58] [59] [61] [96] [189] [17] [45] [16] [21] [22]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exaccent.mf\n Ok [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10] [11] [12]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exsign.mf\n Ok [24] [34] [35] [36] [37] [64] [191] [159]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrlig.mf\n Ok [25] [26] [28] [27] [29] [30] [31]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exromp.mf\n Ok [38] [63] [190]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrulett.mf\n Ok [65] [66] [67] [68] [69] [70] [71] [72] [73] [74] [75] [76] [77] [78] [79] [80] [81] [82] [83] [84] [85] [86] [87] [88] [89] [90]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrllett.mf\n Ok [97] [98] [99] [100] [101] [102] [103] [104] [105] [106] [107] [108] [109] [110] [111] [112] [113] [114] [115] [116] [117] [118] [119] [120] [121] [122]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrdigit.mf\n Ok [48] [49] [50] [51] [52] [53] [54] [55] [56] [57]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrligtb.mf\n Ok) ) ) )\n(some charht values had to be adjusted by as much as 0.07143pt)\nFont metrics written on ecrm1200.tfm.\nOutput written on ecrm1200.600gf (256 characters, 60320 bytes).\nTranscript written on ecrm1200.log.\nmktexpk: /root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1200.600pk: successfully generated.\n ) </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1200.600pk>\nkpathsea: Running mktexpk --mfmode / --bdpi 600 --mag 1+0/600 --dpi 600 ecbx1728\nmktexpk: Running mf-nowin -progname=mf \\mode:=ljfour; mag:=1+0/600; nonstopmode; input ecbx1728\nThis is METAFONT, Version 2.71828182 (TeX Live 2022/dev/Debian) (preloaded base=mf)\n\n(/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/ecbx1728.mf (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exbase.mf) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/ecbx.mf (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exroman.mf\n Ok (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exaccess.mf\n Ok) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/expseudo.mf\n Ok) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exruwest.mf\n Ok [192] [193] [194] [195] [196] [197] [198] [199] [200] [201] [202] [203] [204] [205] [206] [207] [208] [209] [210] [211] [212] [213] [214] [215] [216] [217] [218] [219] [220] [221] [222] [223]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrlwest.mf\n Ok [224] [225] [226] [227] [228] [229] [230] [231] [232] [233] [234] [235] [236] [237] [238] [239] [240] [241] [242] [243] [244] [245] [246] [247] [248] [249] [250] [251] [252] [253] [254] [255]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrueast.mf\n Ok [128] [129] [130] [131] [132] [133] [134] [135] [136] [137] [138] [139] [140] [141] [142] [143] [144] [145] [146] [147] [148] [149] [150] [151] [152] [153] [154] [155] [156] [157]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrleast.mf\n Ok [158] [160] [161] [162] [163] [164] [165] [166] [167] [168] [169] [170] [171] [172] [173] [174] [175] [176] [177] [178] [179] [180] [181] [182] [183] [184] [185] [186] [187] [188]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exbraces.mf\n Ok [94] [126] [23] [40] [41] [60] [124] [62] [91] [93] [92] [123] [125] [95] [127] [32]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/expunct.mf\n Ok [14] [15] [19] [20] [13] [18] [33] [39] [42] [43] [44] [46] [47] [58] [59] [61] [96] [189] [17] [45] [16] [21] [22]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exaccent.mf\n Ok [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10] [11] [12]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exsign.mf\n Ok [24] [34] [35] [36] [37] [64] [191] [159]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrlig.mf\n Ok [25] [26] [28] [27] [29] [30] [31]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exromp.mf\n Ok [38] [63] [190]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrulett.mf\n Ok [65] [66] [67] [68] [69] [70] [71] [72] [73] [74] [75] [76] [77] [78] [79] [80] [81] [82] [83] [84] [85] [86] [87] [88] [89] [90]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrllett.mf\n Ok [97] [98] [99] [100] [101] [102] [103] [104] [105] [106] [107] [108] [109] [110] [111] [112] [113] [114] [115] [116] [117] [118] [119] [120] [121] [122]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrdigit.mf\n Ok [48] [49] [50] [51] [52] [53] [54] [55] [56] [57]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrligtb.mf\n Ok) ) ) )\n(some charht values had to be adjusted by as much as 0.13197pt)\nFont metrics written on ecbx1728.tfm.\nOutput written on ecbx1728.600gf (256 characters, 84848 bytes).\nTranscript written on ecbx1728.log.\nmktexpk: /root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1728.600pk: successfully generated.\n </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1728.600pk>\nkpathsea: Running mktexpk --mfmode / --bdpi 600 --mag 1+0/600 --dpi 600 ecrm1440\nmktexpk: Running mf-nowin -progname=mf \\mode:=ljfour; mag:=1+0/600; nonstopmode; input ecrm1440\nThis is METAFONT, Version 2.71828182 (TeX Live 2022/dev/Debian) (preloaded base=mf)\n\n(/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/ecrm1440.mf (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exbase.mf) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/ecrm.mf (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exroman.mf\n Ok (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exaccess.mf\n Ok) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/expseudo.mf\n Ok) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exruwest.mf\n Ok [192] [193] [194] [195] [196] [197] [198] [199] [200] [201] [202] [203] [204] [205] [206] [207] [208] [209] [210] [211] [212] [213] [214] [215] [216] [217] [218] [219] [220] [221] [222] [223]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrlwest.mf\n Ok [224] [225] [226] [227] [228] [229] [230] [231] [232] [233] [234] [235] [236] [237] [238] [239] [240] [241] [242] [243] [244] [245] [246] [247] [248] [249] [250] [251] [252] [253] [254] [255]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrueast.mf\n Ok [128] [129] [130] [131] [132] [133] [134] [135] [136] [137] [138] [139] [140] [141] [142] [143] [144] [145] [146] [147] [148] [149] [150] [151] [152] [153] [154] [155] [156] [157]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrleast.mf\n Ok [158] [160] [161] [162] [163] [164] [165] [166] [167] [168] [169] [170] [171] [172] [173] [174] [175] [176] [177] [178] [179] [180] [181] [182] [183] [184] [185] [186] [187] [188]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exbraces.mf\n Ok [94] [126] [23] [40] [41] [60] [124] [62] [91] [93] [92] [123] [125] [95] [127] [32]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/expunct.mf\n Ok [14] [15] [19] [20] [13] [18] [33] [39] [42] [43] [44] [46] [47] [58] [59] [61] [96] [189] [17] [45] [16] [21] [22]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exaccent.mf\n Ok [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10] [11] [12]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exsign.mf\n Ok [24] [34] [35] [36] [37] [64] [191] [159]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrlig.mf\n Ok [25] [26] [28] [27] [29] [30] [31]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exromp.mf\n Ok [38] [63] [190]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrulett.mf\n Ok [65] [66] [67] [68] [69] [70] [71] [72] [73] [74] [75] [76] [77] [78] [79] [80] [81] [82] [83] [84] [85] [86] [87] [88] [89] [90]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrllett.mf\n Ok [97] [98] [99] [100] [101] [102] [103] [104] [105] [106] [107] [108] [109] [110] [111] [112] [113] [114] [115] [116] [117] [118] [119] [120] [121] [122]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrdigit.mf\n Ok [48] [49] [50] [51] [52] [53] [54] [55] [56] [57]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrligtb.mf\n Ok) ) ) )\n(some charht values had to be adjusted by as much as 0.08084pt)\nFont metrics written on ecrm1440.tfm.\nOutput written on ecrm1440.600gf (256 characters, 71064 bytes).\nTranscript written on ecrm1440.log.\nmktexpk: /root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1440.600pk: successfully generated.\n </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1440.600pk>\nkpathsea: Running mktexpk --mfmode / --bdpi 600 --mag 1+0/600 --dpi 600 ecrm2074\nmktexpk: Running mf-nowin -progname=mf \\mode:=ljfour; mag:=1+0/600; nonstopmode; input ecrm2074\nThis is METAFONT, Version 2.71828182 (TeX Live 2022/dev/Debian) (preloaded base=mf)\n\n(/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/ecrm2074.mf (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exbase.mf) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/ecrm.mf (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exroman.mf\n Ok (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exaccess.mf\n Ok) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/expseudo.mf\n Ok) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exruwest.mf\n Ok [192] [193] [194] [195] [196] [197] [198] [199] [200] [201] [202] [203] [204] [205] [206] [207] [208] [209] [210] [211] [212] [213] [214] [215] [216] [217] [218] [219] [220] [221] [222] [223]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrlwest.mf\n Ok [224] [225] [226] [227] [228] [229] [230] [231] [232] [233] [234] [235] [236] [237] [238] [239] [240] [241] [242] [243] [244] [245] [246] [247] [248] [249] [250] [251] [252] [253] [254] [255]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrueast.mf\n Ok [128] [129] [130] [131] [132] [133] [134] [135] [136] [137] [138] [139] [140] [141] [142] [143] [144] [145] [146] [147] [148] [149] [150] [151] [152] [153] [154] [155] [156] [157]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrleast.mf\n Ok [158] [160] [161] [162] [163] [164] [165] [166] [167] [168] [169] [170] [171] [172] [173] [174] [175] [176] [177] [178] [179] [180] [181] [182] [183] [184] [185] [186] [187] [188]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exbraces.mf\n Ok [94] [126] [23] [40] [41] [60] [124] [62] [91] [93] [92] [123] [125] [95] [127] [32]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/expunct.mf\n Ok [14] [15] [19] [20] [13] [18] [33] [39] [42] [43] [44] [46] [47] [58] [59] [61] [96] [189] [17] [45] [16] [21] [22]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exaccent.mf\n Ok [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10] [11] [12]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exsign.mf\n Ok [24] [34] [35] [36] [37] [64] [191] [159]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrlig.mf\n Ok [25] [26] [28] [27] [29] [30] [31]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exromp.mf\n Ok [38] [63] [190]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrulett.mf\n Ok [65] [66] [67] [68] [69] [70] [71] [72] [73] [74] [75] [76] [77] [78] [79] [80] [81] [82] [83] [84] [85] [86] [87] [88] [89] [90]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrllett.mf\n Ok [97] [98] [99] [100] [101] [102] [103] [104] [105] [106] [107] [108] [109] [110] [111] [112] [113] [114] [115] [116] [117] [118] [119] [120] [121] [122]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrdigit.mf\n Ok [48] [49] [50] [51] [52] [53] [54] [55] [56] [57]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrligtb.mf\n Ok) ) ) )\n(some charht values had to be adjusted by as much as 0.1171pt)\nFont metrics written on ecrm2074.tfm.\nOutput written on ecrm2074.600gf (256 characters, 101464 bytes).\nTranscript written on ecrm2074.log.\nmktexpk: /root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm2074.600pk: successfully generated.\n </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm2074.600pk>\nOutput written on document.pdf (1 page, 26424 bytes).\nTranscript written on document.log.\nLatexmk: Log file says output to 'document.pdf'\nRule 'pdflatex': File changes, etc:\n   Changed files, or newly in use since previous run(s):\n      'document.aux'\n------------\nRun number 2 of rule 'pdflatex'\n------------\n------------\nRunning 'pdflatex  -interaction=nonstopmode -no-shell-escape -file-line-error -recorder  \"./document.tex\"'\n------------\nLatexmk: Examining 'document.log'\n=== TeX engine is 'pdfTeX'\nLatexmk: applying rule 'pdflatex'...\nThis is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex)\nentering extended mode\n(./document.tex\nLaTeX2e <2021-11-15> patch level 1\nL3 programming layer <2022-01-21> (/usr/share/texlive/texmf-dist/tex/latex/base/article.cls\nDocument Class: article 2021/10/04 v1.4n Standard LaTeX document class\n(/usr/share/texlive/texmf-dist/tex/latex/base/size12.clo)) (/usr/share/texlive/texmf-dist/tex/latex/base/inputenc.sty) (/usr/share/texlive/texmf-dist/tex/latex/base/fontenc.sty) (/usr/share/texlive/texmf-dist/tex/generic/babel/babel.sty (/usr/share/texlive/texmf-dist/tex/generic/babel/txtbabel.def) (/usr/share/texlive/texmf-dist/tex/generic/babel-portuges/brazil.ldf)) (/usr/share/texlive/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def) (./document.aux)\n\nLaTeX Warning: No \\author given.\n\n[1{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}] (./document.aux) ) </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1200.600pk> </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1728.600pk> </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1440.600pk> </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm2074.600pk>\nOutput written on document.pdf (1 page, 26424 bytes).\nTranscript written on document.log.\nLatexmk: Log file says output to 'document.pdf'\nLatexmk: Examining 'document.log'\n=== TeX engine is 'pdfTeX'\nLatexmk: All targets (document.pdf) are up-to-date\n","hasPdf":true,"compiledAt":"2026-08-25T00:03:30.883576835Z"} 
+ 
+[6] BUSCAR O PDF GRAVADO 
+   http: 200 
+   PDF servido: 26424 bytes -- OK
+ 
+[7] LISTAR DOCUMENTOS 
+   http: 200 
+   documentos devolvidos: 1
+ 
+[8] LOGIN DOS OUTROS UTILIZADORES 
+   writer@email.com -^> 200 
+   reviewer@email.com -^> 200 
+   member@email.com -^> 200 
+   reader@email.com -^> 200 
+ 
+[9] LIMPANDO O DOCUMENTO DE TESTE 
+TRUNCATE TABLE
+ documentos | usuarios 
+------------+----------
+          0 |        5
+(1 row)
+
+ 
+[10] LOGS DO BACKEND 
+lab-dms-backend  |     SELECT
+lab-dms-backend  |         p.code 
+lab-dms-backend  |     FROM
+lab-dms-backend  |         permissions p     
+lab-dms-backend  |     JOIN
+lab-dms-backend  |         role_permissions rp 
+lab-dms-backend  |             ON p.id = rp.permission_id     
+lab-dms-backend  |     JOIN
+lab-dms-backend  |         user_roles ur 
+lab-dms-backend  |             ON rp.role_id = ur.role_id     
+lab-dms-backend  |     WHERE
+lab-dms-backend  |         ur.user_id = ?     
+lab-dms-backend  |     UNION
+lab-dms-backend  |     SELECT
+lab-dms-backend  |         r.name 
+lab-dms-backend  |     FROM
+lab-dms-backend  |         roles r     
+lab-dms-backend  |     JOIN
+lab-dms-backend  |         user_roles ur 
+lab-dms-backend  |             ON r.id = ur.role_id     
+lab-dms-backend  |     WHERE
+lab-dms-backend  |         ur.user_id = ? 
+lab-dms-backend  | Hibernate: 
+lab-dms-backend  |     select
+lab-dms-backend  |         uje1_0.id,
+lab-dms-backend  |         uje1_0.created_at,
+lab-dms-backend  |         uje1_0.email,
+lab-dms-backend  |         uje1_0.full_name,
+lab-dms-backend  |         uje1_0.last_login,
+lab-dms-backend  |         uje1_0.password_hash,
+lab-dms-backend  |         uje1_0.status,
+lab-dms-backend  |         uje1_0.updated_at,
+lab-dms-backend  |         uje1_0.username 
+lab-dms-backend  |     from
+lab-dms-backend  |         users uje1_0 
+lab-dms-backend  |     where
+lab-dms-backend  |         uje1_0.username=?
+lab-dms-backend  | Hibernate: 
+lab-dms-backend  |     SELECT
+lab-dms-backend  |         p.code 
+lab-dms-backend  |     FROM
+lab-dms-backend  |         permissions p     
+lab-dms-backend  |     JOIN
+lab-dms-backend  |         role_permissions rp 
+lab-dms-backend  |             ON p.id = rp.permission_id     
+lab-dms-backend  |     JOIN
+lab-dms-backend  |         user_roles ur 
+lab-dms-backend  |             ON rp.role_id = ur.role_id     
+lab-dms-backend  |     WHERE
+lab-dms-backend  |         ur.user_id = ?     
+lab-dms-backend  |     UNION
+lab-dms-backend  |     SELECT
+lab-dms-backend  |         r.name 
+lab-dms-backend  |     FROM
+lab-dms-backend  |         roles r     
+lab-dms-backend  |     JOIN
+lab-dms-backend  |         user_roles ur 
+lab-dms-backend  |             ON r.id = ur.role_id     
+lab-dms-backend  |     WHERE
+lab-dms-backend  |         ur.user_id = ? 
+ 
+================== FIM ================== 

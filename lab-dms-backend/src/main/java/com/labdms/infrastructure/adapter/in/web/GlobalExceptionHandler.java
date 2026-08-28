@@ -46,12 +46,53 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
+    /**
+     * Explains WHY access was refused, not just that it was.
+     *
+     * <p>Every refusal used to read "Access denied", so a reviewer who could not
+     * approve had no way to tell whether they lacked the permission, were the
+     * document's own author, or were simply not the person assigned to it. Those
+     * are three different problems with three different fixes, and an
+     * administrator hitting the self-review rule reasonably concluded the system
+     * was broken.
+     *
+     * <p>Saying which rule applied is safe here: the caller is authenticated and
+     * already knows the document exists — unlike a login form, where naming the
+     * reason leaks who has an account.
+     */
+    private static final java.util.Map<String, String> DENIAL_REASONS = java.util.Map.of(
+            "approve_own_document",
+            "Você é o autor deste documento e por isso não pode aprová-lo. "
+            + "Peça a revisão a outra pessoa com permissão de revisor — a separação entre "
+            + "quem escreve e quem aprova é exigida pela norma.",
+            "approve_not_assigned_reviewer",
+            "Este documento tem outro revisor designado. Só essa pessoa, ou um administrador, pode decidir.",
+            "approve",
+            "Você não tem permissão para aprovar revisões. Peça a um administrador "
+            + "o papel de Revisor.",
+            "approve_not_in_sector",
+            "Você tem permissão de revisor, mas não pertence ao setor deste documento. "
+            + "Peça a um administrador para incluí-lo no setor, em Configurações → Setores.",
+            "edit",
+            "Você não tem permissão para editar este documento.",
+            "view",
+            "Você não tem acesso a este documento.",
+            "delete",
+            "Você não tem permissão para excluir documentos."
+    );
+
     @ExceptionHandler(UnauthorizedAccessException.class)
     public ResponseEntity<ErrorResponse> handleUnauthorized(UnauthorizedAccessException ex) {
-        logger.warn("Unauthorized access: {}", ex.getMessage());
-        String translatedMsg = messageSource.getMessage("error.unauthorized", null, "Access denied", LocaleContextHolder.getLocale());
+        Object[] args = ex.getArgs();
+        String reason = (args != null && args.length > 0) ? String.valueOf(args[0]) : "";
+        logger.warn("Access refused ({})", reason.isEmpty() ? "unspecified" : reason);
+
+        String message = DENIAL_REASONS.getOrDefault(reason,
+                messageSource.getMessage("error.unauthorized", null, "Acesso negado.",
+                        LocaleContextHolder.getLocale()));
+
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ErrorResponse("FORBIDDEN", translatedMsg));
+                .body(new ErrorResponse("FORBIDDEN", message));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -94,6 +135,42 @@ public class GlobalExceptionHandler {
         logger.warn("Invalid argument: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ErrorResponse("BAD_REQUEST", ex.getMessage()));
+    }
+
+    /**
+     * A failed sign-in is a normal outcome, not a server fault.
+     *
+     * <p>Without this, {@code BadCredentialsException} fell through to the
+     * catch-all below and the user was told "Internal server error" with a 500 —
+     * indistinguishable from the backend actually being broken. It also filled
+     * the log with stack traces for every mistyped password, burying the real
+     * errors among them.
+     *
+     * <p>The message is deliberately the same whether the account does not exist
+     * or the password is wrong: telling an attacker which e-mails are registered
+     * turns the login form into a directory of users.
+     */
+    @ExceptionHandler({
+            org.springframework.security.authentication.BadCredentialsException.class,
+            org.springframework.security.core.userdetails.UsernameNotFoundException.class
+    })
+    public ResponseEntity<ErrorResponse> handleBadCredentials(Exception ex) {
+        logger.warn("Failed sign-in attempt: {}", ex.getMessage());
+        String translatedMsg = messageSource.getMessage("error.badCredentials", null,
+                "E-mail ou senha inválidos.", LocaleContextHolder.getLocale());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ErrorResponse("BAD_CREDENTIALS", translatedMsg));
+    }
+
+    /** The account exists but is not active (pending approval or disabled). */
+    @ExceptionHandler(org.springframework.security.authentication.DisabledException.class)
+    public ResponseEntity<ErrorResponse> handleDisabled(Exception ex) {
+        logger.warn("Sign-in attempt on an inactive account: {}", ex.getMessage());
+        String translatedMsg = messageSource.getMessage("error.accountDisabled", null,
+                "Esta conta ainda não está ativa. Fale com um administrador.",
+                LocaleContextHolder.getLocale());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse("ACCOUNT_DISABLED", translatedMsg));
     }
 
     @ExceptionHandler(Exception.class)

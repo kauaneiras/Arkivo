@@ -1,0 +1,555 @@
+================================================== 
+ LAB DMS - teste de ponta a ponta                  
+ 24/08/2026 21:11:36,84                                     
+================================================== 
+ 
+[1] DOCKER 
+29.1.3
+ 
+[2] CONSTRUINDO O FRONTEND 
+#1 [internal] load local bake definitions
+#1 reading from stdin 1.13kB done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 1.50kB done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/nginx:alpine
+#3 DONE 0.6s
+
+#4 [internal] load metadata for docker.io/library/node:20-alpine
+#4 DONE 0.6s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 2B done
+#5 DONE 0.0s
+
+#6 [stage-1 1/3] FROM docker.io/library/nginx:alpine@sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913
+#6 resolve docker.io/library/nginx:alpine@sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913 0.0s done
+#6 DONE 0.0s
+
+#7 [builder 1/6] FROM docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293
+#7 resolve docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 0.0s done
+#7 DONE 0.0s
+
+#8 [internal] load build context
+#8 transferring context: 1.12MB 0.4s done
+#8 DONE 0.4s
+
+#9 [builder 4/6] RUN npm install
+#9 CACHED
+
+#10 [stage-1 2/3] COPY --from=builder /app/dist /usr/share/nginx/html
+#10 CACHED
+
+#11 [builder 3/6] COPY package*.json ./
+#11 CACHED
+
+#12 [builder 5/6] COPY . .
+#12 CACHED
+
+#13 [builder 6/6] RUN npm run build
+#13 CACHED
+
+#14 [builder 2/6] WORKDIR /app
+#14 CACHED
+
+#15 [stage-1 3/3] RUN printf 'server {\n    listen 3000;\n    client_max_body_size 20M;\n\n    location /api/ {\n        proxy_pass http://backend:8080/api/;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n        proxy_read_timeout 120s;\n    }\n\n    location / {\n        root /usr/share/nginx/html;\n        index index.html;\n        try_files $uri $uri/ /index.html;\n    }\n}\n' > /etc/nginx/conf.d/default.conf
+#15 CACHED
+
+#16 exporting to image
+#16 exporting layers done
+#16 exporting manifest sha256:6114d283fcf9fbe7b89571b51857c8fb6ebc8fb5a9dd577e9efe616037e2cd64 done
+#16 exporting config sha256:fab8ece213c4de0a569b550d85c6a7e7c24f3338eb3a109509f80e44db42078d done
+#16 exporting attestation manifest sha256:7db41d3edb300f5086656769909bb98eb15d87224dc09bba4037657c12fca2e8
+#16 exporting attestation manifest sha256:7db41d3edb300f5086656769909bb98eb15d87224dc09bba4037657c12fca2e8 0.0s done
+#16 exporting manifest list sha256:e7eaa7193fcc9d1ae46e5b7bda8322a796cdd35ad2e1a0d02276dde5dc4e098a 0.0s done
+#16 naming to docker.io/library/lab-dms-frontend:latest done
+#16 unpacking to docker.io/library/lab-dms-frontend:latest done
+#16 DONE 0.1s
+
+#17 resolving provenance for metadata file
+#17 DONE 0.0s
+ lab-dms-frontend  Built
+   codigo de saida: 0 
+ 
+[3] CONSTRUINDO O BACKEND 
+#1 [internal] load local bake definitions
+#1 reading from stdin 586B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 3.98kB done
+#2 WARN: FromAsCasing: 'as' and 'FROM' keywords' casing do not match (line 1)
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/eclipse-temurin:21-jre-jammy
+#3 ...
+
+#4 [internal] load metadata for docker.io/library/maven:3.9-eclipse-temurin-21-alpine
+#4 DONE 0.6s
+
+#3 [internal] load metadata for docker.io/library/eclipse-temurin:21-jre-jammy
+#3 DONE 0.6s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 2B done
+#5 DONE 0.0s
+
+#6 [stage-1 1/4] FROM docker.io/library/eclipse-temurin:21-jre-jammy@sha256:eebd356ad7358b7094758e5787a6726f332917cfd56feab6457c56dab895cdbf
+#6 resolve docker.io/library/eclipse-temurin:21-jre-jammy@sha256:eebd356ad7358b7094758e5787a6726f332917cfd56feab6457c56dab895cdbf 0.0s done
+#6 DONE 0.0s
+
+#7 [builder 1/6] FROM docker.io/library/maven:3.9-eclipse-temurin-21-alpine@sha256:65353f527c86cb23187c8233475713e15067e8d36220d18863c379680698fe85
+#7 resolve docker.io/library/maven:3.9-eclipse-temurin-21-alpine@sha256:65353f527c86cb23187c8233475713e15067e8d36220d18863c379680698fe85 0.0s done
+#7 DONE 0.0s
+
+#8 [internal] load build context
+#8 transferring context: 26.57kB 0.0s done
+#8 DONE 0.0s
+
+#9 [builder 3/6] COPY pom.xml .
+#9 CACHED
+
+#10 [builder 2/6] WORKDIR /app
+#10 CACHED
+
+#11 [builder 4/6] RUN mvn dependency:go-offline
+#11 CACHED
+
+#12 [builder 5/6] COPY src src
+#12 DONE 0.1s
+
+#13 [builder 6/6] RUN mvn package
+#13 1.054 [INFO] Scanning for projects...
+#13 1.246 [INFO] 
+#13 1.246 [INFO] ---------------------< com.labdms:lab-dms-backend >---------------------
+#13 1.246 [INFO] Building Lab DMS Backend 1.0.0-SNAPSHOT
+#13 1.246 [INFO]   from pom.xml
+#13 1.246 [INFO] --------------------------------[ jar ]---------------------------------
+#13 1.560 Downloading from central: https://repo.maven.apache.org/maven2/org/jboss/logging/jboss-logging/3.5.3.Final/jboss-logging-3.5.3.Final.pom
+#13 1.957 Progress (1): 755 BProgress (1): 1.9 kBProgress (1): 4.1 kBProgress (1): 8.3 kBProgress (1): 15 kB Progress (1): 18 kBProgress (1): 19 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/jboss/logging/jboss-logging/3.5.3.Final/jboss-logging-3.5.3.Final.pom (19 kB at 46 kB/s)
+#13 1.972 Downloading from central: https://repo.maven.apache.org/maven2/org/jboss/logging/logging-parent/1.0.1.Final/logging-parent-1.0.1.Final.pom
+#13 2.040 Progress (1): 1.2 kBProgress (1): 2.6 kBProgress (1): 6.0 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/jboss/logging/logging-parent/1.0.1.Final/logging-parent-1.0.1.Final.pom (6.0 kB at 86 kB/s)
+#13 2.053 Downloading from central: https://repo.maven.apache.org/maven2/com/fasterxml/classmate/1.7.0/classmate-1.7.0.pom
+#13 2.127 Progress (1): 1.2 kBProgress (1): 2.4 kBProgress (1): 4.4 kBProgress (1): 7.0 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/com/fasterxml/classmate/1.7.0/classmate-1.7.0.pom (7.0 kB at 93 kB/s)
+#13 2.131 Downloading from central: https://repo.maven.apache.org/maven2/net/bytebuddy/byte-buddy/1.14.19/byte-buddy-1.14.19.pom
+#13 2.198 Progress (1): 1.1 kBProgress (1): 3.0 kBProgress (1): 3.2 kBProgress (1): 5.9 kBProgress (1): 13 kB Progress (1): 16 kBProgress (1): 16 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/net/bytebuddy/byte-buddy/1.14.19/byte-buddy-1.14.19.pom (16 kB at 234 kB/s)
+#13 2.202 Downloading from central: https://repo.maven.apache.org/maven2/net/bytebuddy/byte-buddy-parent/1.14.19/byte-buddy-parent-1.14.19.pom
+#13 2.268 Progress (1): 829 BProgress (1): 1.7 kBProgress (1): 3.1 kBProgress (1): 5.5 kBProgress (1): 7.0 kBProgress (1): 8.9 kBProgress (1): 12 kB Progress (1): 13 kBProgress (1): 17 kBProgress (1): 22 kBProgress (1): 24 kBProgress (1): 31 kBProgress (1): 46 kBProgress (1): 49 kBProgress (1): 54 kBProgress (1): 58 kBProgress (1): 62 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/net/bytebuddy/byte-buddy-parent/1.14.19/byte-buddy-parent-1.14.19.pom (62 kB at 902 kB/s)
+#13 2.279 Downloading from central: https://repo.maven.apache.org/maven2/org/glassfish/jaxb/jaxb-runtime/4.0.5/jaxb-runtime-4.0.5.pom
+#13 2.341 Progress (1): 806 BProgress (1): 2.4 kBProgress (1): 6.4 kBProgress (1): 9.2 kBProgress (1): 11 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/glassfish/jaxb/jaxb-runtime/4.0.5/jaxb-runtime-4.0.5.pom (11 kB at 172 kB/s)
+#13 2.345 Downloading from central: https://repo.maven.apache.org/maven2/com/sun/xml/bind/mvn/jaxb-runtime-parent/4.0.5/jaxb-runtime-parent-4.0.5.pom
+#13 2.415 Progress (1): 932 BProgress (1): 1.2 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/com/sun/xml/bind/mvn/jaxb-runtime-parent/4.0.5/jaxb-runtime-parent-4.0.5.pom (1.2 kB at 17 kB/s)
+#13 2.418 Downloading from central: https://repo.maven.apache.org/maven2/com/sun/xml/bind/mvn/jaxb-parent/4.0.5/jaxb-parent-4.0.5.pom
+#13 2.487 Progress (1): 778 BProgress (1): 2.0 kBProgress (1): 4.0 kBProgress (1): 5.7 kBProgress (1): 8.2 kBProgress (1): 14 kB Progress (1): 18 kBProgress (1): 22 kBProgress (1): 28 kBProgress (1): 33 kBProgress (1): 35 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/com/sun/xml/bind/mvn/jaxb-parent/4.0.5/jaxb-parent-4.0.5.pom (35 kB at 486 kB/s)
+#13 2.492 Downloading from central: https://repo.maven.apache.org/maven2/com/sun/xml/bind/jaxb-bom-ext/4.0.5/jaxb-bom-ext-4.0.5.pom
+#13 2.554 Progress (1): 863 BProgress (1): 2.6 kBProgress (1): 3.5 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/com/sun/xml/bind/jaxb-bom-ext/4.0.5/jaxb-bom-ext-4.0.5.pom (3.5 kB at 55 kB/s)
+#13 2.559 Downloading from central: https://repo.maven.apache.org/maven2/org/glassfish/jaxb/jaxb-core/4.0.5/jaxb-core-4.0.5.pom
+#13 2.612 Progress (1): 898 BProgress (1): 2.5 kBProgress (1): 3.7 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/glassfish/jaxb/jaxb-core/4.0.5/jaxb-core-4.0.5.pom (3.7 kB at 69 kB/s)
+#13 2.617 Downloading from central: https://repo.maven.apache.org/maven2/org/eclipse/angus/angus-activation/2.0.2/angus-activation-2.0.2.pom
+#13 2.693 Progress (1): 930 BProgress (1): 2.5 kBProgress (1): 4.0 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/eclipse/angus/angus-activation/2.0.2/angus-activation-2.0.2.pom (4.0 kB at 52 kB/s)
+#13 2.696 Downloading from central: https://repo.maven.apache.org/maven2/org/eclipse/angus/angus-activation-project/2.0.2/angus-activation-project-2.0.2.pom
+#13 2.759 Progress (1): 873 BProgress (1): 2.6 kBProgress (1): 5.6 kBProgress (1): 10 kB Progress (1): 14 kBProgress (1): 18 kBProgress (1): 20 kBProgress (1): 21 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/eclipse/angus/angus-activation-project/2.0.2/angus-activation-project-2.0.2.pom (21 kB at 326 kB/s)
+#13 2.763 Downloading from central: https://repo.maven.apache.org/maven2/org/glassfish/jaxb/txw2/4.0.5/txw2-4.0.5.pom
+#13 2.840 Progress (1): 931 BProgress (1): 1.8 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/glassfish/jaxb/txw2/4.0.5/txw2-4.0.5.pom (1.8 kB at 23 kB/s)
+#13 2.842 Downloading from central: https://repo.maven.apache.org/maven2/com/sun/xml/bind/mvn/jaxb-txw-parent/4.0.5/jaxb-txw-parent-4.0.5.pom
+#13 2.920 Progress (1): 930 BProgress (1): 1.2 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/com/sun/xml/bind/mvn/jaxb-txw-parent/4.0.5/jaxb-txw-parent-4.0.5.pom (1.2 kB at 15 kB/s)
+#13 2.924 Downloading from central: https://repo.maven.apache.org/maven2/com/sun/istack/istack-commons-runtime/4.1.2/istack-commons-runtime-4.1.2.pom
+#13 2.986 Progress (1): 933 BProgress (1): 1.6 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/com/sun/istack/istack-commons-runtime/4.1.2/istack-commons-runtime-4.1.2.pom (1.6 kB at 25 kB/s)
+#13 2.989 Downloading from central: https://repo.maven.apache.org/maven2/com/sun/istack/istack-commons/4.1.2/istack-commons-4.1.2.pom
+#13 3.050 Progress (1): 794 BProgress (1): 2.6 kBProgress (1): 4.8 kBProgress (1): 12 kB Progress (1): 17 kBProgress (1): 21 kBProgress (1): 26 kBProgress (1): 26 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/com/sun/istack/istack-commons/4.1.2/istack-commons-4.1.2.pom (26 kB at 424 kB/s)
+#13 3.092 Downloading from central: https://repo.maven.apache.org/maven2/io/netty/netty-common/4.1.114.Final/netty-common-4.1.114.Final.pom
+#13 3.151 Progress (1): 1.3 kBProgress (1): 4.7 kBProgress (1): 10 kB Progress (1): 12 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/io/netty/netty-common/4.1.114.Final/netty-common-4.1.114.Final.pom (12 kB at 193 kB/s)
+#13 3.154 Downloading from central: https://repo.maven.apache.org/maven2/io/netty/netty-parent/4.1.114.Final/netty-parent-4.1.114.Final.pom
+#13 3.218 Progress (1): 720 BProgress (1): 2.1 kBProgress (1): 4.2 kBProgress (1): 7.0 kBProgress (1): 8.6 kBProgress (1): 22 kB Progress (1): 26 kBProgress (1): 26 kBProgress (1): 28 kBProgress (1): 30 kBProgress (1): 33 kBProgress (1): 36 kBProgress (1): 41 kBProgress (1): 45 kBProgress (1): 49 kBProgress (1): 51 kBProgress (1): 52 kBProgress (1): 58 kBProgress (1): 60 kBProgress (1): 62 kBProgress (1): 65 kBProgress (1): 68 kBProgress (1): 70 kBProgress (1): 73 kBProgress (1): 75 kBProgress (1): 75 kBProgress (1): 78 kBProgress (1): 81 kBProgress (1): 86 kBProgress (1): 90 kBProgress (1): 92 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/io/netty/netty-parent/4.1.114.Final/netty-parent-4.1.114.Final.pom (92 kB at 1.3 MB/s)
+#13 3.231 Downloading from central: https://repo.maven.apache.org/maven2/io/netty/netty-handler/4.1.114.Final/netty-handler-4.1.114.Final.pom
+#13 3.292 Progress (1): 800 BProgress (1): 3.9 kBProgress (1): 4.6 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/io/netty/netty-handler/4.1.114.Final/netty-handler-4.1.114.Final.pom (4.6 kB at 75 kB/s)
+#13 3.298 Downloading from central: https://repo.maven.apache.org/maven2/io/netty/netty-resolver/4.1.114.Final/netty-resolver-4.1.114.Final.pom
+#13 3.349 Progress (1): 886 BProgress (1): 1.6 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/io/netty/netty-resolver/4.1.114.Final/netty-resolver-4.1.114.Final.pom (1.6 kB at 31 kB/s)
+#13 3.354 Downloading from central: https://repo.maven.apache.org/maven2/io/netty/netty-buffer/4.1.114.Final/netty-buffer-4.1.114.Final.pom
+#13 3.435 Progress (1): 885 BProgress (1): 1.6 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/io/netty/netty-buffer/4.1.114.Final/netty-buffer-4.1.114.Final.pom (1.6 kB at 19 kB/s)
+#13 3.439 Downloading from central: https://repo.maven.apache.org/maven2/io/netty/netty-transport/4.1.114.Final/netty-transport-4.1.114.Final.pom
+#13 3.500 Progress (1): 859 BProgress (1): 2.2 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/io/netty/netty-transport/4.1.114.Final/netty-transport-4.1.114.Final.pom (2.2 kB at 35 kB/s)
+#13 3.504 Downloading from central: https://repo.maven.apache.org/maven2/io/netty/netty-transport-native-unix-common/4.1.114.Final/netty-transport-native-unix-common-4.1.114.Final.pom
+#13 3.575 Progress (1): 772 BProgress (1): 2.2 kBProgress (1): 4.3 kBProgress (1): 6.8 kBProgress (1): 15 kB Progress (1): 33 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/io/netty/netty-transport-native-unix-common/4.1.114.Final/netty-transport-native-unix-common-4.1.114.Final.pom (33 kB at 460 kB/s)
+#13 3.581 Downloading from central: https://repo.maven.apache.org/maven2/io/netty/netty-codec/4.1.114.Final/netty-codec-4.1.114.Final.pom
+#13 3.646 Progress (1): 807 BProgress (1): 4.5 kBProgress (1): 5.5 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/io/netty/netty-codec/4.1.114.Final/netty-codec-4.1.114.Final.pom (5.5 kB at 83 kB/s)
+#13 3.650 Downloading from central: https://repo.maven.apache.org/maven2/io/projectreactor/reactor-core/3.6.11/reactor-core-3.6.11.pom
+#13 3.715 Progress (1): 1.1 kBProgress (1): 2.1 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/io/projectreactor/reactor-core/3.6.11/reactor-core-3.6.11.pom (2.1 kB at 33 kB/s)
+#13 3.738 Downloading from central: https://repo.maven.apache.org/maven2/com/fasterxml/jackson/dataformat/jackson-dataformat-toml/2.17.2/jackson-dataformat-toml-2.17.2.pom
+#13 3.799 Progress (1): 1.0 kBProgress (1): 3.2 kBProgress (1): 3.5 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/com/fasterxml/jackson/dataformat/jackson-dataformat-toml/2.17.2/jackson-dataformat-toml-2.17.2.pom (3.5 kB at 55 kB/s)
+#13 3.803 Downloading from central: https://repo.maven.apache.org/maven2/com/fasterxml/jackson/dataformat/jackson-dataformats-text/2.17.2/jackson-dataformats-text-2.17.2.pom
+#13 3.861 Progress (1): 1.2 kBProgress (1): 3.0 kBProgress (1): 3.5 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/com/fasterxml/jackson/dataformat/jackson-dataformats-text/2.17.2/jackson-dataformats-text-2.17.2.pom (3.5 kB at 59 kB/s)
+#13 3.937 Downloading from central: https://repo.maven.apache.org/maven2/com/fasterxml/jackson/dataformat/jackson-dataformat-yaml/2.17.2/jackson-dataformat-yaml-2.17.2.pom
+#13 4.013 Progress (1): 973 BProgress (1): 2.5 kBProgress (1): 2.6 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/com/fasterxml/jackson/dataformat/jackson-dataformat-yaml/2.17.2/jackson-dataformat-yaml-2.17.2.pom (2.6 kB at 34 kB/s)
+#13 4.035 Downloading from central: https://repo.maven.apache.org/maven2/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.pom
+#13 4.101 Progress (1): 1.2 kBProgress (1): 3.6 kBProgress (1): 6.2 kBProgress (1): 10 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.pom (10 kB at 156 kB/s)
+#13 4.150 Downloading from central: https://repo.maven.apache.org/maven2/org/jboss/logging/jboss-logging/3.5.3.Final/jboss-logging-3.5.3.Final.jar
+#13 4.211 Progress (1): 3.2/59 kBProgress (1): 20/59 kB Progress (1): 36/59 kBProgress (1): 52/59 kBProgress (1): 59 kB                      Downloaded from central: https://repo.maven.apache.org/maven2/org/jboss/logging/jboss-logging/3.5.3.Final/jboss-logging-3.5.3.Final.jar (59 kB at 846 kB/s)
+#13 4.222 Downloading from central: https://repo.maven.apache.org/maven2/com/fasterxml/classmate/1.7.0/classmate-1.7.0.jar
+#13 4.222 Downloading from central: https://repo.maven.apache.org/maven2/net/bytebuddy/byte-buddy/1.14.19/byte-buddy-1.14.19.jar
+#13 4.222 Downloading from central: https://repo.maven.apache.org/maven2/org/glassfish/jaxb/jaxb-runtime/4.0.5/jaxb-runtime-4.0.5.jar
+#13 4.223 Downloading from central: https://repo.maven.apache.org/maven2/org/glassfish/jaxb/jaxb-core/4.0.5/jaxb-core-4.0.5.jar
+#13 4.223 Downloading from central: https://repo.maven.apache.org/maven2/org/eclipse/angus/angus-activation/2.0.2/angus-activation-2.0.2.jar
+#13 4.322 Progress (1): 7.7/69 kBProgress (1): 16/69 kB Progress (1): 32/69 kBProgress (1): 49/69 kBProgress (1): 57/69 kBProgress (1): 69 kB                      Downloaded from central: https://repo.maven.apache.org/maven2/com/fasterxml/classmate/1.7.0/classmate-1.7.0.jar (69 kB at 669 kB/s)
+#13 4.324 Downloading from central: https://repo.maven.apache.org/maven2/org/glassfish/jaxb/txw2/4.0.5/txw2-4.0.5.jar
+#13 4.380 Progress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (1): 0/4.2 MBProgress (2): 0/4.2 MB | 0.9/27 kBProgress (2): 0/4.2 MB | 0.9/27 kBProgress (2): 0/4.2 MB | 0.9/27 kBProgress (2): 0/4.2 MB | 2.3/27 kBProgress (2): 0/4.2 MB | 2.3/27 kBProgress (2): 0/4.2 MB | 3.6/27 kBProgress (2): 0/4.2 MB | 3.6/27 kBProgress (2): 0/4.2 MB | 5.0/27 kBProgress (2): 0/4.2 MB | 5.0/27 kBProgress (2): 0/4.2 MB | 6.4/27 kBProgress (2): 0/4.2 MB | 7.7/27 kBProgress (2): 0/4.2 MB | 7.7/27 kBProgress (2): 0/4.2 MB | 9.1/27 kBProgress (2): 0/4.2 MB | 9.1/27 kBProgress (2): 0/4.2 MB | 9.1/27 kBProgress (2): 0/4.2 MB | 9.1/27 kBProgress (2): 0/4.2 MB | 9.1/27 kBProgress (2): 0/4.2 MB | 10/27 kB Progress (2): 0/4.2 MB | 10/27 kBProgress (2): 0/4.2 MB | 12/27 kBProgress (2): 0/4.2 MB | 12/27 kBProgress (2): 0/4.2 MB | 12/27 kBProgress (2): 0/4.2 MB | 12/27 kBProgress (2): 0.1/4.2 MB | 12/27 kBProgress (2): 0.1/4.2 MB | 12/27 kBProgress (2): 0.1/4.2 MB | 13/27 kBProgress (2): 0.1/4.2 MB | 13/27 kBProgress (2): 0.1/4.2 MB | 13/27 kBProgress (2): 0.1/4.2 MB | 15/27 kBProgress (2): 0.1/4.2 MB | 16/27 kBProgress (2): 0.1/4.2 MB | 16/27 kBProgress (2): 0.1/4.2 MB | 16/27 kBProgress (2): 0.1/4.2 MB | 17/27 kBProgress (2): 0.1/4.2 MB | 19/27 kBProgress (2): 0.1/4.2 MB | 20/27 kBProgress (2): 0.1/4.2 MB | 21/27 kBProgress (2): 0.1/4.2 MB | 23/27 kBProgress (2): 0.1/4.2 MB | 24/27 kBProgress (2): 0.1/4.2 MB | 25/27 kBProgress (2): 0.1/4.2 MB | 26/27 kBProgress (2): 0.1/4.2 MB | 27 kB                                   Downloaded from central: https://repo.maven.apache.org/maven2/org/eclipse/angus/angus-activation/2.0.2/angus-activation-2.0.2.jar (27 kB at 165 kB/s)
+#13 4.387 Downloading from central: https://repo.maven.apache.org/maven2/com/sun/istack/istack-commons-runtime/4.1.2/istack-commons-runtime-4.1.2.jar
+#13 4.389 Progress (2): 0.1/4.2 MB | 7.7/73 kBProgress (2): 0.1/4.2 MB | 11/73 kB Progress (2): 0.1/4.2 MB | 28/73 kBProgress (2): 0.1/4.2 MB | 44/73 kBProgress (2): 0.1/4.2 MB | 61/73 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 0.9/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 2.3/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 3.6/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 5.0/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 6.4/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 7.7/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 9.1/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 10/920 kB Progress (3): 0.1/4.2 MB | 61/73 kB | 12/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 13/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 15/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 16/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 17/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 19/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 20/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 21/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 23/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 24/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 26/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 27/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 28/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 29/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 30/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 32/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 33/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 35/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 36/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 37/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 39/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 40/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 41/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 43/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 44/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 46/920 kBProgress (3): 0.1/4.2 MB | 61/73 kB | 47/920 kBProgress (3): 0.1/4.2 MB | 73 kB | 47/920 kB   Progress (3): 0.1/4.2 MB | 73 kB | 48/920 kBProgress (3): 0.1/4.2 MB | 73 kB | 50/920 kBProgress (3): 0.1/4.2 MB | 73 kB | 51/920 kBProgress (3): 0.1/4.2 MB | 73 kB | 52/920 kBProgress (3): 0.1/4.2 MB | 73 kB | 54/920 kBProgress (3): 0.1/4.2 MB | 73 kB | 55/920 kBProgress (3): 0.1/4.2 MB | 73 kB | 59/920 kB                                            Downloaded from central: https://repo.maven.apache.org/maven2/org/glassfish/jaxb/txw2/4.0.5/txw2-4.0.5.jar (73 kB at 409 kB/s)
+#13 4.402 Downloading from central: https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/2.0.16/slf4j-api-2.0.16.jar
+#13 4.413 Progress (2): 0.1/4.2 MB | 59/920 kBProgress (2): 0.1/4.2 MB | 59/920 kBProgress (2): 0.1/4.2 MB | 59/920 kBProgress (2): 0.1/4.2 MB | 59/920 kBProgress (2): 0.1/4.2 MB | 59/920 kBProgress (2): 0.1/4.2 MB | 59/920 kBProgress (2): 0.1/4.2 MB | 59/920 kBProgress (2): 0.1/4.2 MB | 59/920 kBProgress (2): 0.1/4.2 MB | 59/920 kBProgress (2): 0.1/4.2 MB | 59/920 kBProgress (2): 0.1/4.2 MB | 59/920 kBProgress (2): 0.1/4.2 MB | 59/920 kBProgress (2): 0.1/4.2 MB | 59/920 kBProgress (2): 0.1/4.2 MB | 59/920 kBProgress (2): 0.1/4.2 MB | 59/920 kBProgress (2): 0.1/4.2 MB | 64/920 kBProgress (2): 0.1/4.2 MB | 68/920 kBProgress (2): 0.1/4.2 MB | 72/920 kBProgress (2): 0.1/4.2 MB | 76/920 kBProgress (2): 0.1/4.2 MB | 80/920 kBProgress (2): 0.1/4.2 MB | 85/920 kBProgress (2): 0.1/4.2 MB | 89/920 kBProgress (2): 0.1/4.2 MB | 93/920 kBProgress (2): 0.1/4.2 MB | 97/920 kBProgress (2): 0.1/4.2 MB | 102/920 kBProgress (2): 0.1/4.2 MB | 106/920 kBProgress (2): 0.1/4.2 MB | 110/920 kBProgress (2): 0.1/4.2 MB | 114/920 kBProgress (2): 0.1/4.2 MB | 119/920 kBProgress (2): 0.1/4.2 MB | 123/920 kBProgress (2): 0.1/4.2 MB | 123/920 kBProgress (2): 0.1/4.2 MB | 123/920 kBProgress (2): 0.1/4.2 MB | 123/920 kBProgress (2): 0.1/4.2 MB | 123/920 kBProgress (2): 0.1/4.2 MB | 123/920 kBProgress (2): 0.1/4.2 MB | 123/920 kBProgress (2): 0.2/4.2 MB | 123/920 kBProgress (2): 0.2/4.2 MB | 123/920 kBProgress (2): 0.2/4.2 MB | 127/920 kBProgress (2): 0.2/4.2 MB | 127/920 kBProgress (2): 0.2/4.2 MB | 131/920 kBProgress (2): 0.2/4.2 MB | 135/920 kBProgress (2): 0.2/4.2 MB | 135/920 kBProgress (2): 0.2/4.2 MB | 135/920 kBProgress (2): 0.2/4.2 MB | 135/920 kBProgress (2): 0.2/4.2 MB | 140/920 kBProgress (2): 0.2/4.2 MB | 144/920 kBProgress (2): 0.2/4.2 MB | 144/920 kBProgress (2): 0.2/4.2 MB | 144/920 kBProgress (2): 0.2/4.2 MB | 148/920 kBProgress (2): 0.2/4.2 MB | 152/920 kBProgress (2): 0.2/4.2 MB | 152/920 kBProgress (2): 0.2/4.2 MB | 152/920 kBProgress (2): 0.2/4.2 MB | 152/920 kBProgress (2): 0.2/4.2 MB | 152/920 kBProgress (2): 0.2/4.2 MB | 152/920 kBProgress (2): 0.2/4.2 MB | 152/920 kBProgress (2): 0.2/4.2 MB | 152/920 kBProgress (2): 0.2/4.2 MB | 157/920 kBProgress (2): 0.2/4.2 MB | 159/920 kBProgress (2): 0.2/4.2 MB | 163/920 kBProgress (2): 0.2/4.2 MB | 167/920 kBProgress (2): 0.2/4.2 MB | 171/920 kBProgress (2): 0.2/4.2 MB | 176/920 kBProgress (2): 0.2/4.2 MB | 176/920 kBProgress (2): 0.2/4.2 MB | 176/920 kBProgress (2): 0.2/4.2 MB | 180/920 kBProgress (2): 0.2/4.2 MB | 184/920 kBProgress (2): 0.2/4.2 MB | 188/920 kBProgress (2): 0.2/4.2 MB | 193/920 kBProgress (2): 0.2/4.2 MB | 197/920 kBProgress (2): 0.2/4.2 MB | 201/920 kBProgress (2): 0.2/4.2 MB | 205/920 kBProgress (2): 0.2/4.2 MB | 210/920 kBProgress (2): 0.2/4.2 MB | 214/920 kBProgress (2): 0.2/4.2 MB | 218/920 kBProgress (2): 0.2/4.2 MB | 222/920 kBProgress (2): 0.2/4.2 MB | 222/920 kBProgress (3): 0.2/4.2 MB | 222/920 kB | 0.9/26 kBProgress (3): 0.2/4.2 MB | 222/920 kB | 2.3/26 kBProgress (3): 0.2/4.2 MB | 222/920 kB | 3.6/26 kBProgress (3): 0.3/4.2 MB | 222/920 kB | 3.6/26 kBProgress (3): 0.3/4.2 MB | 239/920 kB | 3.6/26 kBProgress (3): 0.3/4.2 MB | 239/920 kB | 5.0/26 kBProgress (3): 0.3/4.2 MB | 239/920 kB | 6.4/26 kBProgress (3): 0.3/4.2 MB | 239/920 kB | 7.7/26 kBProgress (3): 0.3/4.2 MB | 239/920 kB | 9.1/26 kBProgress (3): 0.3/4.2 MB | 239/920 kB | 10/26 kB Progress (3): 0.3/4.2 MB | 255/920 kB | 10/26 kBProgress (3): 0.3/4.2 MB | 255/920 kB | 12/26 kBProgress (3): 0.3/4.2 MB | 255/920 kB | 13/26 kBProgress (3): 0.3/4.2 MB | 255/920 kB | 15/26 kBProgress (3): 0.3/4.2 MB | 255/920 kB | 16/26 kBProgress (3): 0.3/4.2 MB | 255/920 kB | 17/26 kBProgress (3): 0.3/4.2 MB | 255/920 kB | 19/26 kBProgress (3): 0.3/4.2 MB | 255/920 kB | 20/26 kBProgress (3): 0.3/4.2 MB | 255/920 kB | 21/26 kBProgress (3): 0.3/4.2 MB | 255/920 kB | 23/26 kBProgress (3): 0.3/4.2 MB | 255/920 kB | 24/26 kBProgress (3): 0.3/4.2 MB | 255/920 kB | 26/26 kBProgress (3): 0.3/4.2 MB | 255/920 kB | 26 kB   Progress (4): 0.3/4.2 MB | 255/920 kB | 26 kB | 7.7/69 kBProgress (4): 0.3/4.2 MB | 255/920 kB | 26 kB | 16/69 kB                                                         Downloaded from central: https://repo.maven.apache.org/maven2/com/sun/istack/istack-commons-runtime/4.1.2/istack-commons-runtime-4.1.2.jar (26 kB at 104 kB/s)
+#13 4.471 Downloading from central: https://repo.maven.apache.org/maven2/io/netty/netty-common/4.1.114.Final/netty-common-4.1.114.Final.jar
+#13 4.472 Progress (3): 0.3/4.2 MB | 255/920 kB | 24/69 kBProgress (3): 0.3/4.2 MB | 255/920 kB | 40/69 kBProgress (3): 0.3/4.2 MB | 255/920 kB | 57/69 kBProgress (3): 0.3/4.2 MB | 255/920 kB | 57/69 kBProgress (3): 0.3/4.2 MB | 255/920 kB | 57/69 kBProgress (3): 0.3/4.2 MB | 255/920 kB | 69 kB                                                Downloaded from central: https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/2.0.16/slf4j-api-2.0.16.jar (69 kB at 269 kB/s)
+#13 4.481 Downloading from central: https://repo.maven.apache.org/maven2/io/netty/netty-handler/4.1.114.Final/netty-handler-4.1.114.Final.jar
+#13 4.483 Progress (2): 0.3/4.2 MB | 255/920 kBProgress (2): 0.3/4.2 MB | 271/920 kBProgress (2): 0.3/4.2 MB | 271/920 kBProgress (2): 0.3/4.2 MB | 288/920 kBProgress (2): 0.3/4.2 MB | 290/920 kBProgress (2): 0.3/4.2 MB | 290/920 kBProgress (2): 0.3/4.2 MB | 306/920 kBProgress (2): 0.3/4.2 MB | 323/920 kBProgress (2): 0.3/4.2 MB | 339/920 kBProgress (2): 0.3/4.2 MB | 339/920 kBProgress (2): 0.3/4.2 MB | 355/920 kBProgress (2): 0.4/4.2 MB | 355/920 kBProgress (2): 0.4/4.2 MB | 372/920 kBProgress (2): 0.4/4.2 MB | 372/920 kBProgress (2): 0.4/4.2 MB | 388/920 kBProgress (2): 0.4/4.2 MB | 388/920 kBProgress (2): 0.4/4.2 MB | 405/920 kBProgress (2): 0.4/4.2 MB | 421/920 kBProgress (2): 0.4/4.2 MB | 421/920 kBProgress (2): 0.4/4.2 MB | 437/920 kBProgress (2): 0.4/4.2 MB | 454/920 kBProgress (2): 0.4/4.2 MB | 470/920 kBProgress (2): 0.4/4.2 MB | 486/920 kBProgress (2): 0.4/4.2 MB | 486/920 kBProgress (2): 0.4/4.2 MB | 503/920 kBProgress (2): 0.4/4.2 MB | 503/920 kBProgress (2): 0.5/4.2 MB | 503/920 kBProgress (2): 0.5/4.2 MB | 503/920 kBProgress (2): 0.5/4.2 MB | 503/920 kBProgress (2): 0.5/4.2 MB | 519/920 kBProgress (2): 0.5/4.2 MB | 519/920 kBProgress (2): 0.5/4.2 MB | 536/920 kBProgress (2): 0.5/4.2 MB | 536/920 kBProgress (2): 0.5/4.2 MB | 536/920 kBProgress (2): 0.6/4.2 MB | 536/920 kBProgress (3): 0.6/4.2 MB | 536/920 kB | 3.8/695 kBProgress (3): 0.6/4.2 MB | 552/920 kB | 3.8/695 kBProgress (3): 0.6/4.2 MB | 552/920 kB | 8.0/695 kBProgress (3): 0.6/4.2 MB | 552/920 kB | 8.0/695 kBProgress (3): 0.6/4.2 MB | 552/920 kB | 12/695 kB Progress (3): 0.6/4.2 MB | 552/920 kB | 16/695 kBProgress (3): 0.6/4.2 MB | 552/920 kB | 21/695 kBProgress (3): 0.6/4.2 MB | 552/920 kB | 25/695 kBProgress (3): 0.6/4.2 MB | 568/920 kB | 25/695 kBProgress (3): 0.6/4.2 MB | 568/920 kB | 29/695 kBProgress (3): 0.6/4.2 MB | 568/920 kB | 33/695 kBProgress (3): 0.6/4.2 MB | 568/920 kB | 37/695 kBProgress (3): 0.6/4.2 MB | 568/920 kB | 37/695 kBProgress (3): 0.6/4.2 MB | 585/920 kB | 37/695 kBProgress (3): 0.6/4.2 MB | 585/920 kB | 41/695 kBProgress (3): 0.6/4.2 MB | 601/920 kB | 41/695 kBProgress (3): 0.6/4.2 MB | 601/920 kB | 46/695 kBProgress (3): 0.6/4.2 MB | 601/920 kB | 46/695 kBProgress (3): 0.6/4.2 MB | 601/920 kB | 46/695 kBProgress (3): 0.6/4.2 MB | 601/920 kB | 50/695 kBProgress (3): 0.6/4.2 MB | 601/920 kB | 54/695 kBProgress (3): 0.6/4.2 MB | 601/920 kB | 54/695 kBProgress (3): 0.6/4.2 MB | 601/920 kB | 58/695 kBProgress (3): 0.6/4.2 MB | 618/920 kB | 58/695 kBProgress (3): 0.6/4.2 MB | 618/920 kB | 63/695 kBProgress (3): 0.7/4.2 MB | 618/920 kB | 63/695 kBProgress (3): 0.7/4.2 MB | 634/920 kB | 63/695 kBProgress (3): 0.7/4.2 MB | 634/920 kB | 63/695 kBProgress (3): 0.7/4.2 MB | 634/920 kB | 63/695 kBProgress (3): 0.7/4.2 MB | 650/920 kB | 63/695 kBProgress (3): 0.7/4.2 MB | 650/920 kB | 63/695 kBProgress (3): 0.7/4.2 MB | 667/920 kB | 63/695 kBProgress (3): 0.7/4.2 MB | 683/920 kB | 63/695 kBProgress (3): 0.7/4.2 MB | 683/920 kB | 63/695 kBProgress (3): 0.7/4.2 MB | 699/920 kB | 63/695 kBProgress (3): 0.7/4.2 MB | 699/920 kB | 63/695 kBProgress (3): 0.7/4.2 MB | 716/920 kB | 63/695 kBProgress (3): 0.7/4.2 MB | 732/920 kB | 63/695 kBProgress (3): 0.8/4.2 MB | 732/920 kB | 63/695 kBProgress (3): 0.8/4.2 MB | 749/920 kB | 63/695 kBProgress (3): 0.8/4.2 MB | 765/920 kB | 63/695 kBProgress (3): 0.8/4.2 MB | 767/920 kB | 63/695 kBProgress (3): 0.8/4.2 MB | 784/920 kB | 63/695 kBProgress (3): 0.8/4.2 MB | 800/920 kB | 63/695 kBProgress (3): 0.8/4.2 MB | 817/920 kB | 63/695 kBProgress (3): 0.8/4.2 MB | 833/920 kB | 63/695 kBProgress (3): 0.8/4.2 MB | 849/920 kB | 63/695 kBProgress (3): 0.8/4.2 MB | 866/920 kB | 63/695 kBProgress (4): 0.8/4.2 MB | 866/920 kB | 63/695 kB | 7.7/577 kBProgress (4): 0.8/4.2 MB | 882/920 kB | 63/695 kB | 7.7/577 kBProgress (4): 0.8/4.2 MB | 882/920 kB | 63/695 kB | 16/577 kB Progress (4): 0.8/4.2 MB | 882/920 kB | 63/695 kB | 24/577 kBProgress (4): 0.8/4.2 MB | 899/920 kB | 63/695 kB | 24/577 kBProgress (4): 0.8/4.2 MB | 899/920 kB | 63/695 kB | 40/577 kBProgress (4): 0.8/4.2 MB | 915/920 kB | 63/695 kB | 40/577 kBProgress (4): 0.8/4.2 MB | 920 kB | 63/695 kB | 40/577 kB    Progress (4): 0.8/4.2 MB | 920 kB | 63/695 kB | 57/577 kBProgress (4): 0.8/4.2 MB | 920 kB | 63/695 kB | 73/577 kB                                                         Downloaded from central: https://repo.maven.apache.org/maven2/org/glassfish/jaxb/jaxb-runtime/4.0.5/jaxb-runtime-4.0.5.jar (920 kB at 2.7 MB/s)
+#13 4.569 Downloading from central: https://repo.maven.apache.org/maven2/io/netty/netty-resolver/4.1.114.Final/netty-resolver-4.1.114.Final.jar
+#13 4.573 Progress (3): 0.8/4.2 MB | 66/695 kB | 73/577 kBProgress (3): 0.8/4.2 MB | 70/695 kB | 73/577 kBProgress (3): 0.8/4.2 MB | 70/695 kB | 73/577 kBProgress (3): 0.8/4.2 MB | 74/695 kB | 73/577 kBProgress (3): 0.8/4.2 MB | 78/695 kB | 73/577 kBProgress (3): 0.8/4.2 MB | 82/695 kB | 73/577 kBProgress (3): 0.8/4.2 MB | 86/695 kB | 73/577 kBProgress (3): 0.8/4.2 MB | 86/695 kB | 90/577 kBProgress (3): 0.8/4.2 MB | 91/695 kB | 90/577 kBProgress (3): 0.8/4.2 MB | 91/695 kB | 106/577 kBProgress (3): 0.8/4.2 MB | 91/695 kB | 122/577 kBProgress (3): 0.8/4.2 MB | 95/695 kB | 122/577 kBProgress (3): 0.8/4.2 MB | 95/695 kB | 122/577 kBProgress (3): 0.8/4.2 MB | 99/695 kB | 122/577 kBProgress (3): 0.8/4.2 MB | 103/695 kB | 122/577 kBProgress (3): 0.8/4.2 MB | 103/695 kB | 122/577 kBProgress (3): 0.8/4.2 MB | 108/695 kB | 122/577 kBProgress (3): 0.8/4.2 MB | 112/695 kB | 122/577 kBProgress (3): 0.8/4.2 MB | 116/695 kB | 122/577 kBProgress (3): 0.8/4.2 MB | 120/695 kB | 122/577 kBProgress (3): 0.8/4.2 MB | 123/695 kB | 122/577 kBProgress (3): 0.8/4.2 MB | 123/695 kB | 122/577 kBProgress (3): 0.8/4.2 MB | 127/695 kB | 122/577 kBProgress (3): 0.8/4.2 MB | 131/695 kB | 122/577 kBProgress (3): 0.8/4.2 MB | 135/695 kB | 122/577 kBProgress (3): 0.8/4.2 MB | 135/695 kB | 139/577 kBProgress (3): 0.8/4.2 MB | 140/695 kB | 139/577 kBProgress (3): 0.8/4.2 MB | 144/695 kB | 139/577 kBProgress (3): 0.8/4.2 MB | 148/695 kB | 139/577 kBProgress (3): 0.8/4.2 MB | 152/695 kB | 139/577 kBProgress (3): 0.8/4.2 MB | 152/695 kB | 155/577 kBProgress (3): 0.8/4.2 MB | 152/695 kB | 155/577 kBProgress (3): 0.9/4.2 MB | 152/695 kB | 155/577 kBProgress (3): 0.9/4.2 MB | 156/695 kB | 155/577 kBProgress (3): 0.9/4.2 MB | 156/695 kB | 172/577 kBProgress (3): 0.9/4.2 MB | 156/695 kB | 172/577 kBProgress (3): 0.9/4.2 MB | 160/695 kB | 172/577 kBProgress (3): 0.9/4.2 MB | 164/695 kB | 172/577 kBProgress (3): 0.9/4.2 MB | 164/695 kB | 172/577 kBProgress (3): 0.9/4.2 MB | 164/695 kB | 172/577 kBProgress (3): 0.9/4.2 MB | 180/695 kB | 172/577 kBProgress (3): 0.9/4.2 MB | 188/695 kB | 172/577 kBProgress (3): 0.9/4.2 MB | 188/695 kB | 188/577 kBProgress (3): 0.9/4.2 MB | 197/695 kB | 188/577 kBProgress (3): 0.9/4.2 MB | 197/695 kB | 188/577 kBProgress (3): 0.9/4.2 MB | 197/695 kB | 204/577 kBProgress (3): 0.9/4.2 MB | 197/695 kB | 221/577 kBProgress (3): 0.9/4.2 MB | 197/695 kB | 221/577 kBProgress (3): 1.0/4.2 MB | 197/695 kB | 221/577 kBProgress (3): 1.0/4.2 MB | 197/695 kB | 237/577 kBProgress (3): 1.0/4.2 MB | 213/695 kB | 237/577 kBProgress (3): 1.0/4.2 MB | 213/695 kB | 237/577 kBProgress (3): 1.0/4.2 MB | 213/695 kB | 237/577 kBProgress (3): 1.0/4.2 MB | 230/695 kB | 237/577 kBProgress (3): 1.0/4.2 MB | 230/695 kB | 237/577 kBProgress (3): 1.0/4.2 MB | 230/695 kB | 253/577 kBProgress (3): 1.0/4.2 MB | 230/695 kB | 253/577 kBProgress (3): 1.0/4.2 MB | 230/695 kB | 253/577 kBProgress (3): 1.0/4.2 MB | 230/695 kB | 253/577 kBProgress (3): 1.0/4.2 MB | 230/695 kB | 270/577 kBProgress (3): 1.0/4.2 MB | 246/695 kB | 270/577 kBProgress (3): 1.1/4.2 MB | 246/695 kB | 270/577 kBProgress (3): 1.1/4.2 MB | 246/695 kB | 270/577 kBProgress (3): 1.1/4.2 MB | 246/695 kB | 286/577 kBProgress (3): 1.1/4.2 MB | 246/695 kB | 303/577 kBProgress (3): 1.1/4.2 MB | 246/695 kB | 303/577 kBProgress (3): 1.1/4.2 MB | 246/695 kB | 303/577 kBProgress (3): 1.1/4.2 MB | 246/695 kB | 303/577 kBProgress (3): 1.1/4.2 MB | 262/695 kB | 303/577 kBProgress (3): 1.1/4.2 MB | 279/695 kB | 303/577 kBProgress (3): 1.1/4.2 MB | 279/695 kB | 303/577 kBProgress (4): 1.1/4.2 MB | 279/695 kB | 303/577 kB | 3.2/38 kBProgress (4): 1.1/4.2 MB | 279/695 kB | 319/577 kB | 3.2/38 kBProgress (4): 1.1/4.2 MB | 279/695 kB | 335/577 kB | 3.2/38 kBProgress (4): 1.1/4.2 MB | 295/695 kB | 335/577 kB | 3.2/38 kBProgress (4): 1.2/4.2 MB | 295/695 kB | 335/577 kB | 3.2/38 kBProgress (4): 1.2/4.2 MB | 295/695 kB | 335/577 kB | 3.2/38 kBProgress (4): 1.2/4.2 MB | 295/695 kB | 335/577 kB | 3.2/38 kBProgress (4): 1.2/4.2 MB | 295/695 kB | 352/577 kB | 3.2/38 kBProgress (4): 1.2/4.2 MB | 295/695 kB | 352/577 kB | 20/38 kB Progress (4): 1.2/4.2 MB | 295/695 kB | 368/577 kB | 20/38 kBProgress (4): 1.2/4.2 MB | 295/695 kB | 368/577 kB | 20/38 kBProgress (4): 1.2/4.2 MB | 295/695 kB | 368/577 kB | 20/38 kBProgress (4): 1.2/4.2 MB | 295/695 kB | 385/577 kB | 20/38 kBProgress (4): 1.2/4.2 MB | 312/695 kB | 385/577 kB | 20/38 kBProgress (4): 1.2/4.2 MB | 312/695 kB | 385/577 kB | 20/38 kBProgress (4): 1.2/4.2 MB | 312/695 kB | 401/577 kB | 20/38 kBProgress (4): 1.2/4.2 MB | 312/695 kB | 401/577 kB | 36/38 kBProgress (4): 1.2/4.2 MB | 312/695 kB | 417/577 kB | 36/38 kBProgress (4): 1.3/4.2 MB | 312/695 kB | 417/577 kB | 36/38 kBProgress (4): 1.3/4.2 MB | 312/695 kB | 417/577 kB | 38 kB   Progress (4): 1.3/4.2 MB | 312/695 kB | 434/577 kB | 38 kB                                                          Downloaded from central: https://repo.maven.apache.org/maven2/io/netty/netty-resolver/4.1.114.Final/netty-resolver-4.1.114.Final.jar (38 kB at 87 kB/s)
+#13 4.657 Downloading from central: https://repo.maven.apache.org/maven2/io/netty/netty-buffer/4.1.114.Final/netty-buffer-4.1.114.Final.jar
+#13 4.657 Progress (3): 1.3/4.2 MB | 319/695 kB | 434/577 kBProgress (3): 1.3/4.2 MB | 336/695 kB | 434/577 kBProgress (3): 1.3/4.2 MB | 336/695 kB | 450/577 kBProgress (3): 1.3/4.2 MB | 336/695 kB | 466/577 kBProgress (3): 1.3/4.2 MB | 336/695 kB | 466/577 kBProgress (3): 1.3/4.2 MB | 336/695 kB | 466/577 kBProgress (3): 1.3/4.2 MB | 336/695 kB | 466/577 kBProgress (3): 1.3/4.2 MB | 336/695 kB | 483/577 kBProgress (3): 1.3/4.2 MB | 336/695 kB | 483/577 kBProgress (3): 1.3/4.2 MB | 336/695 kB | 483/577 kBProgress (3): 1.4/4.2 MB | 336/695 kB | 483/577 kBProgress (3): 1.4/4.2 MB | 336/695 kB | 483/577 kBProgress (3): 1.4/4.2 MB | 352/695 kB | 483/577 kBProgress (3): 1.4/4.2 MB | 352/695 kB | 499/577 kBProgress (3): 1.4/4.2 MB | 369/695 kB | 499/577 kBProgress (3): 1.4/4.2 MB | 369/695 kB | 499/577 kBProgress (3): 1.4/4.2 MB | 369/695 kB | 499/577 kBProgress (3): 1.4/4.2 MB | 369/695 kB | 499/577 kBProgress (3): 1.4/4.2 MB | 385/695 kB | 499/577 kBProgress (3): 1.4/4.2 MB | 385/695 kB | 499/577 kBProgress (3): 1.4/4.2 MB | 401/695 kB | 499/577 kBProgress (3): 1.5/4.2 MB | 401/695 kB | 499/577 kBProgress (3): 1.5/4.2 MB | 401/695 kB | 499/577 kBProgress (3): 1.5/4.2 MB | 401/695 kB | 499/577 kBProgress (3): 1.5/4.2 MB | 401/695 kB | 516/577 kBProgress (3): 1.5/4.2 MB | 401/695 kB | 516/577 kBProgress (3): 1.5/4.2 MB | 401/695 kB | 516/577 kBProgress (3): 1.5/4.2 MB | 418/695 kB | 516/577 kBProgress (3): 1.5/4.2 MB | 418/695 kB | 516/577 kBProgress (3): 1.5/4.2 MB | 434/695 kB | 516/577 kBProgress (3): 1.6/4.2 MB | 434/695 kB | 516/577 kBProgress (3): 1.6/4.2 MB | 434/695 kB | 516/577 kBProgress (3): 1.6/4.2 MB | 434/695 kB | 532/577 kBProgress (3): 1.6/4.2 MB | 434/695 kB | 548/577 kBProgress (3): 1.6/4.2 MB | 434/695 kB | 548/577 kBProgress (3): 1.6/4.2 MB | 434/695 kB | 565/577 kBProgress (3): 1.6/4.2 MB | 451/695 kB | 565/577 kBProgress (3): 1.6/4.2 MB | 467/695 kB | 565/577 kBProgress (3): 1.6/4.2 MB | 467/695 kB | 577 kB    Progress (3): 1.6/4.2 MB | 483/695 kB | 577 kBProgress (3): 1.6/4.2 MB | 483/695 kB | 577 kBProgress (3): 1.6/4.2 MB | 483/695 kB | 577 kB                                              Downloaded from central: https://repo.maven.apache.org/maven2/io/netty/netty-handler/4.1.114.Final/netty-handler-4.1.114.Final.jar (577 kB at 1.3 MB/s)
+#13 4.675 Downloading from central: https://repo.maven.apache.org/maven2/io/netty/netty-transport-native-unix-common/4.1.114.Final/netty-transport-native-unix-common-4.1.114.Final.jar
+#13 4.675 Progress (2): 1.6/4.2 MB | 483/695 kBProgress (2): 1.6/4.2 MB | 500/695 kBProgress (2): 1.6/4.2 MB | 516/695 kBProgress (2): 1.7/4.2 MB | 516/695 kBProgress (2): 1.7/4.2 MB | 516/695 kBProgress (2): 1.7/4.2 MB | 516/695 kBProgress (2): 1.7/4.2 MB | 516/695 kBProgress (2): 1.7/4.2 MB | 532/695 kBProgress (2): 1.7/4.2 MB | 532/695 kBProgress (2): 1.7/4.2 MB | 549/695 kBProgress (2): 1.7/4.2 MB | 549/695 kBProgress (2): 1.7/4.2 MB | 565/695 kBProgress (2): 1.8/4.2 MB | 565/695 kBProgress (2): 1.8/4.2 MB | 565/695 kBProgress (2): 1.8/4.2 MB | 582/695 kBProgress (2): 1.8/4.2 MB | 598/695 kBProgress (2): 1.8/4.2 MB | 598/695 kBProgress (2): 1.8/4.2 MB | 598/695 kBProgress (2): 1.8/4.2 MB | 598/695 kBProgress (2): 1.8/4.2 MB | 598/695 kBProgress (2): 1.9/4.2 MB | 598/695 kBProgress (2): 1.9/4.2 MB | 598/695 kBProgress (2): 1.9/4.2 MB | 614/695 kBProgress (2): 1.9/4.2 MB | 631/695 kBProgress (2): 1.9/4.2 MB | 631/695 kBProgress (2): 1.9/4.2 MB | 647/695 kBProgress (2): 1.9/4.2 MB | 647/695 kBProgress (2): 1.9/4.2 MB | 647/695 kBProgress (2): 1.9/4.2 MB | 647/695 kBProgress (2): 1.9/4.2 MB | 664/695 kBProgress (2): 1.9/4.2 MB | 680/695 kBProgress (2): 1.9/4.2 MB | 695 kB    Progress (2): 1.9/4.2 MB | 695 kBProgress (2): 2.0/4.2 MB | 695 kBProgress (2): 2.0/4.2 MB | 695 kBProgress (2): 2.0/4.2 MB | 695 kB                                 Downloaded from central: https://repo.maven.apache.org/maven2/io/netty/netty-common/4.1.114.Final/netty-common-4.1.114.Final.jar (695 kB at 1.4 MB/s)
+#13 4.708 Downloading from central: https://repo.maven.apache.org/maven2/io/netty/netty-codec/4.1.114.Final/netty-codec-4.1.114.Final.jar
+#13 4.708 Progress (1): 2.0/4.2 MBProgress (1): 2.0/4.2 MBProgress (1): 2.0/4.2 MBProgress (1): 2.1/4.2 MBProgress (1): 2.1/4.2 MBProgress (1): 2.1/4.2 MBProgress (1): 2.1/4.2 MBProgress (1): 2.1/4.2 MBProgress (1): 2.1/4.2 MBProgress (1): 2.2/4.2 MBProgress (1): 2.2/4.2 MBProgress (1): 2.2/4.2 MBProgress (1): 2.2/4.2 MBProgress (1): 2.2/4.2 MBProgress (1): 2.2/4.2 MBProgress (1): 2.3/4.2 MBProgress (1): 2.3/4.2 MBProgress (1): 2.3/4.2 MBProgress (1): 2.3/4.2 MBProgress (1): 2.3/4.2 MBProgress (1): 2.3/4.2 MBProgress (1): 2.4/4.2 MBProgress (1): 2.4/4.2 MBProgress (1): 2.4/4.2 MBProgress (1): 2.4/4.2 MBProgress (1): 2.4/4.2 MBProgress (1): 2.4/4.2 MBProgress (1): 2.4/4.2 MBProgress (1): 2.5/4.2 MBProgress (1): 2.5/4.2 MBProgress (1): 2.5/4.2 MBProgress (1): 2.5/4.2 MBProgress (1): 2.5/4.2 MBProgress (1): 2.5/4.2 MBProgress (1): 2.6/4.2 MBProgress (1): 2.6/4.2 MBProgress (1): 2.6/4.2 MBProgress (1): 2.6/4.2 MBProgress (1): 2.6/4.2 MBProgress (1): 2.6/4.2 MBProgress (1): 2.7/4.2 MBProgress (1): 2.7/4.2 MBProgress (1): 2.7/4.2 MBProgress (1): 2.7/4.2 MBProgress (1): 2.7/4.2 MBProgress (1): 2.7/4.2 MBProgress (1): 2.8/4.2 MBProgress (1): 2.8/4.2 MBProgress (1): 2.8/4.2 MBProgress (1): 2.8/4.2 MBProgress (1): 2.8/4.2 MBProgress (1): 2.8/4.2 MBProgress (1): 2.9/4.2 MBProgress (1): 2.9/4.2 MBProgress (1): 2.9/4.2 MBProgress (1): 2.9/4.2 MBProgress (1): 2.9/4.2 MBProgress (1): 2.9/4.2 MBProgress (1): 2.9/4.2 MBProgress (1): 3.0/4.2 MBProgress (1): 3.0/4.2 MBProgress (1): 3.0/4.2 MBProgress (1): 3.0/4.2 MBProgress (1): 3.0/4.2 MBProgress (1): 3.0/4.2 MBProgress (1): 3.0/4.2 MBProgress (1): 3.1/4.2 MBProgress (1): 3.1/4.2 MBProgress (1): 3.1/4.2 MBProgress (1): 3.1/4.2 MBProgress (1): 3.1/4.2 MBProgress (1): 3.1/4.2 MBProgress (1): 3.2/4.2 MBProgress (2): 3.2/4.2 MB | 7.7/337 kBProgress (2): 3.2/4.2 MB | 7.7/337 kBProgress (2): 3.2/4.2 MB | 8.2/337 kBProgress (2): 3.2/4.2 MB | 25/337 kB Progress (2): 3.2/4.2 MB | 25/337 kBProgress (2): 3.2/4.2 MB | 25/337 kBProgress (2): 3.2/4.2 MB | 25/337 kBProgress (2): 3.2/4.2 MB | 25/337 kBProgress (2): 3.2/4.2 MB | 41/337 kBProgress (2): 3.2/4.2 MB | 41/337 kBProgress (3): 3.2/4.2 MB | 41/337 kB | 7.7/44 kBProgress (3): 3.2/4.2 MB | 41/337 kB | 16/44 kB Progress (3): 3.2/4.2 MB | 57/337 kB | 16/44 kBProgress (3): 3.2/4.2 MB | 57/337 kB | 32/44 kBProgress (3): 3.2/4.2 MB | 66/337 kB | 32/44 kBProgress (3): 3.3/4.2 MB | 66/337 kB | 32/44 kBProgress (3): 3.3/4.2 MB | 66/337 kB | 32/44 kBProgress (3): 3.3/4.2 MB | 82/337 kB | 32/44 kBProgress (3): 3.3/4.2 MB | 90/337 kB | 32/44 kBProgress (3): 3.3/4.2 MB | 90/337 kB | 32/44 kBProgress (3): 3.3/4.2 MB | 90/337 kB | 44 kB   Progress (3): 3.3/4.2 MB | 90/337 kB | 44 kBProgress (3): 3.3/4.2 MB | 98/337 kB | 44 kB                                            Downloaded from central: https://repo.maven.apache.org/maven2/io/netty/netty-transport-native-unix-common/4.1.114.Final/netty-transport-native-unix-common-4.1.114.Final.jar (44 kB at 81 kB/s)
+#13 4.771 Downloading from central: https://repo.maven.apache.org/maven2/io/netty/netty-transport/4.1.114.Final/netty-transport-4.1.114.Final.jar
+#13 4.771 Progress (2): 3.3/4.2 MB | 98/337 kBProgress (2): 3.3/4.2 MB | 115/337 kBProgress (2): 3.3/4.2 MB | 123/337 kBProgress (2): 3.3/4.2 MB | 123/337 kBProgress (2): 3.4/4.2 MB | 123/337 kBProgress (2): 3.4/4.2 MB | 123/337 kBProgress (2): 3.4/4.2 MB | 139/337 kBProgress (2): 3.4/4.2 MB | 147/337 kBProgress (2): 3.4/4.2 MB | 147/337 kBProgress (2): 3.4/4.2 MB | 147/337 kBProgress (2): 3.4/4.2 MB | 156/337 kBProgress (2): 3.4/4.2 MB | 156/337 kBProgress (2): 3.4/4.2 MB | 156/337 kBProgress (2): 3.4/4.2 MB | 172/337 kBProgress (2): 3.4/4.2 MB | 188/337 kBProgress (2): 3.4/4.2 MB | 188/337 kBProgress (2): 3.4/4.2 MB | 205/337 kBProgress (3): 3.4/4.2 MB | 205/337 kB | 7.7/352 kBProgress (3): 3.4/4.2 MB | 221/337 kB | 7.7/352 kBProgress (3): 3.4/4.2 MB | 221/337 kB | 11/352 kB Progress (3): 3.4/4.2 MB | 229/337 kB | 11/352 kBProgress (3): 3.4/4.2 MB | 246/337 kB | 11/352 kBProgress (3): 3.5/4.2 MB | 246/337 kB | 11/352 kBProgress (3): 3.5/4.2 MB | 246/337 kB | 28/352 kBProgress (3): 3.5/4.2 MB | 254/337 kB | 28/352 kBProgress (3): 3.5/4.2 MB | 262/337 kB | 28/352 kBProgress (3): 3.5/4.2 MB | 262/337 kB | 28/352 kBProgress (3): 3.5/4.2 MB | 262/337 kB | 28/352 kBProgress (3): 3.5/4.2 MB | 262/337 kB | 28/352 kBProgress (3): 3.5/4.2 MB | 262/337 kB | 28/352 kBProgress (3): 3.5/4.2 MB | 279/337 kB | 28/352 kBProgress (3): 3.5/4.2 MB | 295/337 kB | 28/352 kBProgress (3): 3.5/4.2 MB | 311/337 kB | 28/352 kBProgress (3): 3.5/4.2 MB | 328/337 kB | 28/352 kBProgress (3): 3.5/4.2 MB | 328/337 kB | 28/352 kBProgress (3): 3.5/4.2 MB | 337 kB | 28/352 kB    Progress (3): 3.6/4.2 MB | 337 kB | 28/352 kBProgress (3): 3.6/4.2 MB | 337 kB | 28/352 kB                                             Downloaded from central: https://repo.maven.apache.org/maven2/io/netty/netty-buffer/4.1.114.Final/netty-buffer-4.1.114.Final.jar (337 kB at 599 kB/s)
+#13 4.785 Downloading from central: https://repo.maven.apache.org/maven2/io/projectreactor/reactor-core/3.6.11/reactor-core-3.6.11.jar
+#13 4.785 Progress (2): 3.6/4.2 MB | 44/352 kBProgress (2): 3.6/4.2 MB | 44/352 kBProgress (2): 3.6/4.2 MB | 61/352 kBProgress (2): 3.6/4.2 MB | 61/352 kBProgress (2): 3.6/4.2 MB | 61/352 kBProgress (2): 3.6/4.2 MB | 61/352 kBProgress (2): 3.6/4.2 MB | 77/352 kBProgress (2): 3.7/4.2 MB | 77/352 kBProgress (2): 3.7/4.2 MB | 93/352 kBProgress (2): 3.7/4.2 MB | 93/352 kBProgress (2): 3.7/4.2 MB | 93/352 kBProgress (2): 3.7/4.2 MB | 93/352 kBProgress (2): 3.7/4.2 MB | 93/352 kBProgress (2): 3.7/4.2 MB | 93/352 kBProgress (2): 3.8/4.2 MB | 93/352 kBProgress (2): 3.8/4.2 MB | 110/352 kBProgress (2): 3.8/4.2 MB | 110/352 kBProgress (2): 3.8/4.2 MB | 110/352 kBProgress (2): 3.8/4.2 MB | 110/352 kBProgress (2): 3.8/4.2 MB | 110/352 kBProgress (2): 3.8/4.2 MB | 126/352 kBProgress (2): 3.8/4.2 MB | 126/352 kBProgress (2): 3.8/4.2 MB | 142/352 kBProgress (2): 3.9/4.2 MB | 142/352 kBProgress (2): 3.9/4.2 MB | 159/352 kBProgress (2): 3.9/4.2 MB | 159/352 kBProgress (2): 3.9/4.2 MB | 175/352 kBProgress (2): 3.9/4.2 MB | 175/352 kBProgress (2): 3.9/4.2 MB | 175/352 kBProgress (2): 3.9/4.2 MB | 175/352 kBProgress (2): 3.9/4.2 MB | 192/352 kBProgress (2): 3.9/4.2 MB | 192/352 kBProgress (2): 3.9/4.2 MB | 208/352 kBProgress (2): 3.9/4.2 MB | 213/352 kBProgress (2): 4.0/4.2 MB | 213/352 kBProgress (2): 4.0/4.2 MB | 229/352 kBProgress (2): 4.0/4.2 MB | 229/352 kBProgress (2): 4.0/4.2 MB | 229/352 kBProgress (2): 4.0/4.2 MB | 246/352 kBProgress (2): 4.0/4.2 MB | 254/352 kBProgress (2): 4.0/4.2 MB | 254/352 kBProgress (2): 4.0/4.2 MB | 262/352 kBProgress (2): 4.0/4.2 MB | 262/352 kBProgress (2): 4.0/4.2 MB | 262/352 kBProgress (2): 4.0/4.2 MB | 262/352 kBProgress (2): 4.0/4.2 MB | 279/352 kBProgress (2): 4.1/4.2 MB | 279/352 kBProgress (2): 4.1/4.2 MB | 279/352 kBProgress (2): 4.1/4.2 MB | 295/352 kBProgress (2): 4.1/4.2 MB | 311/352 kBProgress (2): 4.1/4.2 MB | 311/352 kBProgress (2): 4.1/4.2 MB | 328/352 kBProgress (2): 4.1/4.2 MB | 344/352 kBProgress (2): 4.1/4.2 MB | 352 kB    Progress (2): 4.1/4.2 MB | 352 kBProgress (2): 4.1/4.2 MB | 352 kB                                 Downloaded from central: https://repo.maven.apache.org/maven2/io/netty/netty-codec/4.1.114.Final/netty-codec-4.1.114.Final.jar (352 kB at 599 kB/s)
+#13 4.811 Downloading from central: https://repo.maven.apache.org/maven2/com/fasterxml/jackson/dataformat/jackson-dataformat-toml/2.17.2/jackson-dataformat-toml-2.17.2.jar
+#13 4.811 Progress (1): 4.1/4.2 MBProgress (1): 4.2/4.2 MBProgress (1): 4.2/4.2 MBProgress (1): 4.2/4.2 MBProgress (1): 4.2/4.2 MBProgress (1): 4.2/4.2 MBProgress (1): 4.2 MB                        Downloaded from central: https://repo.maven.apache.org/maven2/net/bytebuddy/byte-buddy/1.14.19/byte-buddy-1.14.19.jar (4.2 MB at 7.1 MB/s)
+#13 4.814 Downloading from central: https://repo.maven.apache.org/maven2/com/fasterxml/jackson/dataformat/jackson-dataformat-yaml/2.17.2/jackson-dataformat-yaml-2.17.2.jar
+#13 4.838 Progress (1): 7.7/521 kBProgress (1): 7.7/521 kBProgress (1): 24/521 kB Progress (1): 40/521 kBProgress (1): 57/521 kBProgress (1): 73/521 kBProgress (1): 90/521 kBProgress (1): 106/521 kBProgress (1): 122/521 kBProgress (1): 139/521 kBProgress (1): 155/521 kBProgress (1): 172/521 kBProgress (1): 188/521 kBProgress (1): 204/521 kBProgress (1): 221/521 kBProgress (1): 237/521 kBProgress (1): 253/521 kBProgress (1): 270/521 kBProgress (1): 286/521 kBProgress (1): 303/521 kBProgress (1): 319/521 kBProgress (1): 335/521 kBProgress (1): 352/521 kBProgress (1): 368/521 kBProgress (1): 385/521 kBProgress (1): 401/521 kBProgress (1): 417/521 kBProgress (1): 434/521 kBProgress (1): 450/521 kBProgress (1): 466/521 kBProgress (1): 483/521 kBProgress (1): 499/521 kBProgress (1): 516/521 kBProgress (2): 516/521 kB | 0/1.9 MBProgress (2): 516/521 kB | 0/1.9 MBProgress (2): 516/521 kB | 0/1.9 MBProgress (2): 516/521 kB | 0/1.9 MBProgress (2): 516/521 kB | 0.1/1.9 MBProgress (2): 516/521 kB | 0.1/1.9 MBProgress (2): 521 kB | 0.1/1.9 MB    Progress (2): 521 kB | 0.1/1.9 MB                                 Downloaded from central: https://repo.maven.apache.org/maven2/io/netty/netty-transport/4.1.114.Final/netty-transport-4.1.114.Final.jar (521 kB at 808 kB/s)
+#13 4.868 Downloading from central: https://repo.maven.apache.org/maven2/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar
+#13 4.868 Progress (1): 0.1/1.9 MBProgress (1): 0.1/1.9 MBProgress (1): 0.1/1.9 MBProgress (1): 0.1/1.9 MBProgress (1): 0.2/1.9 MBProgress (1): 0.2/1.9 MBProgress (1): 0.2/1.9 MBProgress (1): 0.2/1.9 MBProgress (1): 0.2/1.9 MBProgress (1): 0.2/1.9 MBProgress (1): 0.2/1.9 MBProgress (2): 0.2/1.9 MB | 7.7/55 kBProgress (2): 0.2/1.9 MB | 7.7/55 kBProgress (2): 0.3/1.9 MB | 7.7/55 kBProgress (2): 0.3/1.9 MB | 7.7/55 kBProgress (2): 0.3/1.9 MB | 24/55 kB Progress (2): 0.3/1.9 MB | 24/55 kBProgress (2): 0.3/1.9 MB | 24/55 kBProgress (2): 0.3/1.9 MB | 24/55 kBProgress (2): 0.3/1.9 MB | 40/55 kBProgress (2): 0.3/1.9 MB | 40/55 kBProgress (2): 0.3/1.9 MB | 55 kB   Progress (2): 0.3/1.9 MB | 55 kBProgress (2): 0.3/1.9 MB | 55 kB                                Downloaded from central: https://repo.maven.apache.org/maven2/com/fasterxml/jackson/dataformat/jackson-dataformat-yaml/2.17.2/jackson-dataformat-yaml-2.17.2.jar (55 kB at 84 kB/s)
+#13 4.879 Progress (1): 0.4/1.9 MBProgress (1): 0.4/1.9 MBProgress (1): 0.4/1.9 MBProgress (1): 0.4/1.9 MBProgress (1): 0.4/1.9 MBProgress (1): 0.4/1.9 MBProgress (2): 0.4/1.9 MB | 7.7/56 kBProgress (2): 0.4/1.9 MB | 16/56 kB Progress (2): 0.4/1.9 MB | 25/56 kBProgress (2): 0.5/1.9 MB | 25/56 kBProgress (2): 0.5/1.9 MB | 41/56 kBProgress (2): 0.5/1.9 MB | 56 kB                                   Downloaded from central: https://repo.maven.apache.org/maven2/com/fasterxml/jackson/dataformat/jackson-dataformat-toml/2.17.2/jackson-dataformat-toml-2.17.2.jar (56 kB at 84 kB/s)
+#13 4.889 Progress (1): 0.5/1.9 MBProgress (1): 0.5/1.9 MBProgress (1): 0.5/1.9 MBProgress (1): 0.5/1.9 MBProgress (1): 0.5/1.9 MBProgress (1): 0.6/1.9 MBProgress (1): 0.6/1.9 MBProgress (1): 0.6/1.9 MBProgress (1): 0.6/1.9 MBProgress (1): 0.6/1.9 MBProgress (1): 0.6/1.9 MBProgress (1): 0.7/1.9 MBProgress (1): 0.7/1.9 MBProgress (1): 0.7/1.9 MBProgress (1): 0.7/1.9 MBProgress (1): 0.7/1.9 MBProgress (1): 0.7/1.9 MBProgress (1): 0.8/1.9 MBProgress (1): 0.8/1.9 MBProgress (1): 0.8/1.9 MBProgress (1): 0.8/1.9 MBProgress (1): 0.8/1.9 MBProgress (1): 0.8/1.9 MBProgress (1): 0.9/1.9 MBProgress (1): 0.9/1.9 MBProgress (1): 0.9/1.9 MBProgress (1): 0.9/1.9 MBProgress (1): 0.9/1.9 MBProgress (1): 0.9/1.9 MBProgress (1): 0.9/1.9 MBProgress (1): 1.0/1.9 MBProgress (1): 1.0/1.9 MBProgress (1): 1.0/1.9 MBProgress (1): 1.0/1.9 MBProgress (1): 1.0/1.9 MBProgress (1): 1.0/1.9 MBProgress (1): 1.1/1.9 MBProgress (1): 1.1/1.9 MBProgress (1): 1.1/1.9 MBProgress (1): 1.1/1.9 MBProgress (1): 1.1/1.9 MBProgress (1): 1.1/1.9 MBProgress (1): 1.2/1.9 MBProgress (1): 1.2/1.9 MBProgress (1): 1.2/1.9 MBProgress (1): 1.2/1.9 MBProgress (2): 1.2/1.9 MB | 16/263 kBProgress (2): 1.2/1.9 MB | 16/263 kBProgress (2): 1.2/1.9 MB | 16/263 kBProgress (2): 1.3/1.9 MB | 16/263 kBProgress (2): 1.3/1.9 MB | 16/263 kBProgress (2): 1.3/1.9 MB | 33/263 kBProgress (2): 1.3/1.9 MB | 33/263 kBProgress (2): 1.3/1.9 MB | 41/263 kBProgress (2): 1.3/1.9 MB | 41/263 kBProgress (2): 1.3/1.9 MB | 41/263 kBProgress (2): 1.3/1.9 MB | 41/263 kBProgress (2): 1.3/1.9 MB | 57/263 kBProgress (2): 1.3/1.9 MB | 74/263 kBProgress (2): 1.3/1.9 MB | 90/263 kBProgress (2): 1.4/1.9 MB | 90/263 kBProgress (2): 1.4/1.9 MB | 90/263 kBProgress (2): 1.4/1.9 MB | 90/263 kBProgress (2): 1.4/1.9 MB | 90/263 kBProgress (2): 1.4/1.9 MB | 106/263 kBProgress (2): 1.4/1.9 MB | 123/263 kBProgress (2): 1.4/1.9 MB | 123/263 kBProgress (2): 1.4/1.9 MB | 123/263 kBProgress (2): 1.5/1.9 MB | 123/263 kBProgress (2): 1.5/1.9 MB | 139/263 kBProgress (2): 1.5/1.9 MB | 147/263 kBProgress (2): 1.5/1.9 MB | 164/263 kBProgress (2): 1.5/1.9 MB | 180/263 kBProgress (2): 1.5/1.9 MB | 180/263 kBProgress (2): 1.5/1.9 MB | 197/263 kBProgress (2): 1.5/1.9 MB | 197/263 kBProgress (2): 1.5/1.9 MB | 213/263 kBProgress (2): 1.5/1.9 MB | 213/263 kBProgress (2): 1.5/1.9 MB | 229/263 kBProgress (2): 1.5/1.9 MB | 246/263 kBProgress (2): 1.5/1.9 MB | 246/263 kBProgress (2): 1.5/1.9 MB | 246/263 kBProgress (2): 1.5/1.9 MB | 262/263 kBProgress (2): 1.5/1.9 MB | 263 kB    Progress (2): 1.6/1.9 MB | 263 kB                                 Downloaded from central: https://repo.maven.apache.org/maven2/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar (263 kB at 361 kB/s)
+#13 4.950 Progress (1): 1.6/1.9 MBProgress (1): 1.6/1.9 MBProgress (1): 1.6/1.9 MBProgress (1): 1.6/1.9 MBProgress (1): 1.6/1.9 MBProgress (1): 1.6/1.9 MBProgress (1): 1.7/1.9 MBProgress (1): 1.7/1.9 MBProgress (1): 1.7/1.9 MBProgress (1): 1.7/1.9 MBProgress (1): 1.7/1.9 MBProgress (1): 1.7/1.9 MBProgress (1): 1.7/1.9 MBProgress (1): 1.8/1.9 MBProgress (1): 1.8/1.9 MBProgress (1): 1.8/1.9 MBProgress (1): 1.8/1.9 MBProgress (1): 1.8/1.9 MBProgress (1): 1.8/1.9 MBProgress (1): 1.9/1.9 MBProgress (1): 1.9 MB                        Downloaded from central: https://repo.maven.apache.org/maven2/io/projectreactor/reactor-core/3.6.11/reactor-core-3.6.11.jar (1.9 MB at 2.5 MB/s)
+#13 5.070 Progress (1): 0.9/139 kBProgress (1): 2.3/139 kBProgress (1): 3.6/139 kBProgress (1): 5.0/139 kBProgress (1): 6.4/139 kBProgress (1): 7.7/139 kBProgress (1): 9.1/139 kBProgress (1): 10/139 kB Progress (1): 12/139 kBProgress (1): 13/139 kBProgress (1): 15/139 kBProgress (1): 16/139 kBProgress (1): 17/139 kBProgress (1): 19/139 kBProgress (1): 20/139 kBProgress (1): 21/139 kBProgress (1): 23/139 kBProgress (1): 24/139 kBProgress (1): 25/139 kBProgress (1): 27/139 kBProgress (1): 28/139 kBProgress (1): 30/139 kBProgress (1): 31/139 kBProgress (1): 32/139 kBProgress (1): 34/139 kBProgress (1): 35/139 kBProgress (1): 36/139 kBProgress (1): 38/139 kBProgress (1): 39/139 kBProgress (1): 41/139 kBProgress (1): 42/139 kBProgress (1): 43/139 kBProgress (1): 45/139 kBProgress (1): 46/139 kBProgress (1): 47/139 kBProgress (1): 49/139 kBProgress (1): 50/139 kBProgress (1): 51/139 kBProgress (1): 53/139 kBProgress (1): 54/139 kBProgress (1): 56/139 kBProgress (1): 60/139 kBProgress (1): 64/139 kBProgress (1): 68/139 kBProgress (1): 73/139 kBProgress (1): 77/139 kBProgress (1): 81/139 kBProgress (1): 85/139 kBProgress (1): 89/139 kBProgress (1): 94/139 kBProgress (1): 98/139 kBProgress (1): 102/139 kBProgress (1): 106/139 kBProgress (1): 111/139 kBProgress (1): 115/139 kBProgress (1): 119/139 kBProgress (1): 122/139 kBProgress (1): 127/139 kBProgress (1): 131/139 kBProgress (1): 135/139 kBProgress (1): 139 kB                        Downloaded from central: https://repo.maven.apache.org/maven2/org/glassfish/jaxb/jaxb-core/4.0.5/jaxb-core-4.0.5.jar (139 kB at 152 kB/s)
+#13 5.155 [INFO] 
+#13 5.155 [INFO] --- resources:3.3.1:resources (default-resources) @ lab-dms-backend ---
+#13 5.236 [INFO] Copying 1 resource from src/main/resources to target/classes
+#13 5.250 [INFO] Copying 14 resources from src/main/resources to target/classes
+#13 5.254 [INFO] 
+#13 5.254 [INFO] --- compiler:3.13.0:compile (default-compile) @ lab-dms-backend ---
+#13 5.334 [INFO] Recompiling the module because of changed source code.
+#13 5.343 [INFO] Compiling 152 source files with javac [debug parameters release 21] to target/classes
+#13 8.905 [INFO] Annotation processing is enabled because one or more processors were found
+#13 8.905   on the class path. A future release of javac may disable annotation processing
+#13 8.905   unless at least one processor is specified by name (-processor), or a search
+#13 8.905   path is specified (--processor-path, --processor-module-path), or annotation
+#13 8.905   processing is enabled explicitly (-proc:only, -proc:full).
+#13 8.905   Use -Xlint:-options to suppress this message.
+#13 8.905   Use -proc:none to disable annotation processing.
+#13 8.905 [INFO] 
+#13 8.905 [INFO] --- resources:3.3.1:testResources (default-testResources) @ lab-dms-backend ---
+#13 8.911 [INFO] skip non existing resourceDirectory /app/src/test/resources
+#13 8.911 [INFO] 
+#13 8.911 [INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ lab-dms-backend ---
+#13 8.919 [INFO] Recompiling the module because of changed dependency.
+#13 8.919 [INFO] Compiling 7 source files with javac [debug parameters release 21] to target/test-classes
+#13 9.565 [INFO] Annotation processing is enabled because one or more processors were found
+#13 9.565   on the class path. A future release of javac may disable annotation processing
+#13 9.565   unless at least one processor is specified by name (-processor), or a search
+#13 9.565   path is specified (--processor-path, --processor-module-path), or annotation
+#13 9.565   processing is enabled explicitly (-proc:only, -proc:full).
+#13 9.565   Use -Xlint:-options to suppress this message.
+#13 9.565   Use -proc:none to disable annotation processing.
+#13 9.566 [INFO] 
+#13 9.566 [INFO] --- surefire:3.2.5:test (default-test) @ lab-dms-backend ---
+#13 9.764 [INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+#13 9.782 Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/surefire/surefire-junit-platform/3.2.5/surefire-junit-platform-3.2.5.pom
+#13 10.37 Progress (1): 846 BProgress (1): 3.5 kBProgress (1): 4.7 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/surefire/surefire-junit-platform/3.2.5/surefire-junit-platform-3.2.5.pom (4.7 kB at 7.9 kB/s)
+#13 10.37 Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/surefire/surefire-providers/3.2.5/surefire-providers-3.2.5.pom
+#13 10.77 Progress (1): 849 BProgress (1): 2.6 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/surefire/surefire-providers/3.2.5/surefire-providers-3.2.5.pom (2.6 kB at 6.6 kB/s)
+#13 10.77 Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/surefire/common-java5/3.2.5/common-java5-3.2.5.pom
+#13 11.01 Progress (1): 849 BProgress (1): 2.6 kBProgress (1): 2.8 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/surefire/common-java5/3.2.5/common-java5-3.2.5.pom (2.8 kB at 12 kB/s)
+#13 11.01 Downloading from central: https://repo.maven.apache.org/maven2/org/junit/platform/junit-platform-launcher/1.9.3/junit-platform-launcher-1.9.3.pom
+#13 11.43 Progress (1): 966 BProgress (1): 3.0 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/junit/platform/junit-platform-launcher/1.9.3/junit-platform-launcher-1.9.3.pom (3.0 kB at 7.2 kB/s)
+#13 11.43 Downloading from central: https://repo.maven.apache.org/maven2/org/junit/platform/junit-platform-engine/1.9.3/junit-platform-engine-1.9.3.pom
+#13 11.66 Progress (1): 957 BProgress (1): 3.2 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/junit/platform/junit-platform-engine/1.9.3/junit-platform-engine-1.9.3.pom (3.2 kB at 14 kB/s)
+#13 11.66 Downloading from central: https://repo.maven.apache.org/maven2/org/opentest4j/opentest4j/1.2.0/opentest4j-1.2.0.pom
+#13 11.87 Progress (1): 1.2 kBProgress (1): 1.7 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/opentest4j/opentest4j/1.2.0/opentest4j-1.2.0.pom (1.7 kB at 7.9 kB/s)
+#13 11.88 Downloading from central: https://repo.maven.apache.org/maven2/org/junit/platform/junit-platform-commons/1.9.3/junit-platform-commons-1.9.3.pom
+#13 12.05 Progress (1): 971 BProgress (1): 2.8 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/junit/platform/junit-platform-commons/1.9.3/junit-platform-commons-1.9.3.pom (2.8 kB at 16 kB/s)
+#13 12.06 Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/surefire/surefire-junit-platform/3.2.5/surefire-junit-platform-3.2.5.jar
+#13 12.18 Progress (1): 3.8/27 kBProgress (1): 7.7/27 kBProgress (1): 12/27 kB Progress (1): 16/27 kBProgress (1): 20/27 kBProgress (1): 24/27 kBProgress (1): 27 kB                      Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/surefire/surefire-junit-platform/3.2.5/surefire-junit-platform-3.2.5.jar (27 kB at 187 kB/s)
+#13 12.20 Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/surefire/common-java5/3.2.5/common-java5-3.2.5.jar
+#13 12.20 Downloading from central: https://repo.maven.apache.org/maven2/org/junit/platform/junit-platform-launcher/1.9.3/junit-platform-launcher-1.9.3.jar
+#13 12.20 Downloading from central: https://repo.maven.apache.org/maven2/org/junit/platform/junit-platform-engine/1.9.3/junit-platform-engine-1.9.3.jar
+#13 12.20 Downloading from central: https://repo.maven.apache.org/maven2/org/opentest4j/opentest4j/1.2.0/opentest4j-1.2.0.jar
+#13 12.20 Downloading from central: https://repo.maven.apache.org/maven2/org/junit/platform/junit-platform-commons/1.9.3/junit-platform-commons-1.9.3.jar
+#13 12.28 Progress (1): 7.7/103 kBProgress (1): 7.7/103 kBProgress (1): 24/103 kB Progress (1): 40/103 kBProgress (1): 57/103 kBProgress (1): 73/103 kBProgress (1): 90/103 kBProgress (1): 103 kB                       Downloaded from central: https://repo.maven.apache.org/maven2/org/junit/platform/junit-platform-commons/1.9.3/junit-platform-commons-1.9.3.jar (103 kB at 1.3 MB/s)
+#13 12.28 Progress (1): 7.7/189 kBProgress (2): 7.7/189 kB | 7.7/169 kBProgress (2): 7.7/189 kB | 16/169 kB Progress (2): 15/189 kB | 16/169 kB Progress (2): 32/189 kB | 16/169 kBProgress (2): 32/189 kB | 28/169 kBProgress (2): 48/189 kB | 28/169 kBProgress (2): 65/189 kB | 28/169 kBProgress (2): 65/189 kB | 44/169 kBProgress (2): 65/189 kB | 61/169 kBProgress (2): 65/189 kB | 77/169 kBProgress (2): 65/189 kB | 93/169 kBProgress (2): 65/189 kB | 110/169 kBProgress (2): 65/189 kB | 126/169 kBProgress (2): 65/189 kB | 142/169 kBProgress (3): 65/189 kB | 142/169 kB | 7.7 kBProgress (3): 81/189 kB | 142/169 kB | 7.7 kB                                             Downloaded from central: https://repo.maven.apache.org/maven2/org/opentest4j/opentest4j/1.2.0/opentest4j-1.2.0.jar (7.7 kB at 78 kB/s)
+#13 12.30 Progress (2): 81/189 kB | 159/169 kBProgress (2): 97/189 kB | 159/169 kBProgress (2): 114/189 kB | 159/169 kBProgress (2): 114/189 kB | 169 kB    Progress (2): 130/189 kB | 169 kBProgress (2): 147/189 kB | 169 kB                                 Downloaded from central: https://repo.maven.apache.org/maven2/org/junit/platform/junit-platform-launcher/1.9.3/junit-platform-launcher-1.9.3.jar (169 kB at 1.6 MB/s)
+#13 12.31 Progress (1): 163/189 kBProgress (1): 179/189 kBProgress (1): 189 kB                        Downloaded from central: https://repo.maven.apache.org/maven2/org/junit/platform/junit-platform-engine/1.9.3/junit-platform-engine-1.9.3.jar (189 kB at 1.8 MB/s)
+#13 12.31 Progress (1): 7.7/18 kBProgress (1): 7.7/18 kBProgress (1): 18 kB                       Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/surefire/common-java5/3.2.5/common-java5-3.2.5.jar (18 kB at 146 kB/s)
+#13 12.33 Downloading from central: https://repo.maven.apache.org/maven2/org/junit/platform/junit-platform-launcher/1.10.5/junit-platform-launcher-1.10.5.pom
+#13 12.52 Progress (1): 967 BProgress (1): 3.0 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/junit/platform/junit-platform-launcher/1.10.5/junit-platform-launcher-1.10.5.pom (3.0 kB at 16 kB/s)
+#13 12.52 Downloading from central: https://repo.maven.apache.org/maven2/org/junit/platform/junit-platform-launcher/1.10.5/junit-platform-launcher-1.10.5.jar
+#13 12.62 Progress (1): 7.7/184 kBProgress (1): 16/184 kB Progress (1): 24/184 kBProgress (1): 40/184 kBProgress (1): 57/184 kBProgress (1): 73/184 kBProgress (1): 90/184 kBProgress (1): 106/184 kBProgress (1): 122/184 kBProgress (1): 139/184 kBProgress (1): 155/184 kBProgress (1): 172/184 kBProgress (1): 184 kB                        Downloaded from central: https://repo.maven.apache.org/maven2/org/junit/platform/junit-platform-launcher/1.10.5/junit-platform-launcher-1.10.5.jar (184 kB at 1.5 MB/s)
+#13 12.65 [INFO] 
+#13 12.65 [INFO] -------------------------------------------------------
+#13 12.65 [INFO]  T E S T S
+#13 12.65 [INFO] -------------------------------------------------------
+#13 13.05 [INFO] Running com.labdms.shared.util.InputSanitizerTest
+#13 13.17 [INFO] Tests run: 17, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.103 s -- in com.labdms.shared.util.InputSanitizerTest
+#13 13.17 [INFO] Running com.labdms.domain.model.versioning.CommitTest
+#13 13.23 [INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.071 s -- in com.labdms.domain.model.versioning.CommitTest
+#13 13.23 [INFO] Running com.labdms.domain.model.document.DocumentCodeTest
+#13 13.29 [INFO] Tests run: 28, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.055 s -- in com.labdms.domain.model.document.DocumentCodeTest
+#13 13.29 [INFO] Running com.labdms.application.service.LatexCompilationServiceTest
+#13 13.52 OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+#13 13.59 WARNING: A Java agent has been loaded dynamically (/root/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar)
+#13 13.59 WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+#13 13.59 WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+#13 13.59 WARNING: Dynamic loading of agents will be disallowed by default in a future release
+#13 16.07 [INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.775 s -- in com.labdms.application.service.LatexCompilationServiceTest
+#13 16.07 [INFO] Running com.labdms.application.service.AccessControlServiceTest
+#13 16.22 [INFO] Tests run: 12, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.140 s -- in com.labdms.application.service.AccessControlServiceTest
+#13 16.22 [INFO] Running com.labdms.application.service.DocumentServiceTest
+#13 16.36 [INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.139 s -- in com.labdms.application.service.DocumentServiceTest
+#13 16.36 [INFO] Running com.labdms.infrastructure.adapter.out.persistence.mapper.BranchPersistenceMapperTest
+#13 16.37 [INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.008 s -- in com.labdms.infrastructure.adapter.out.persistence.mapper.BranchPersistenceMapperTest
+#13 16.39 [INFO] 
+#13 16.39 [INFO] Results:
+#13 16.39 [INFO] 
+#13 16.39 [INFO] Tests run: 75, Failures: 0, Errors: 0, Skipped: 0
+#13 16.39 [INFO] 
+#13 16.40 [INFO] 
+#13 16.40 [INFO] --- jar:3.4.2:jar (default-jar) @ lab-dms-backend ---
+#13 16.58 [INFO] Building jar: /app/target/lab-dms-backend-1.0.0-SNAPSHOT.jar
+#13 16.63 [INFO] 
+#13 16.63 [INFO] --- spring-boot:3.3.5:repackage (repackage) @ lab-dms-backend ---
+#13 17.09 [INFO] Replacing main artifact /app/target/lab-dms-backend-1.0.0-SNAPSHOT.jar with repackaged archive, adding nested dependencies in BOOT-INF/.
+#13 17.09 [INFO] The original artifact has been renamed to /app/target/lab-dms-backend-1.0.0-SNAPSHOT.jar.original
+#13 17.09 [INFO] ------------------------------------------------------------------------
+#13 17.09 [INFO] BUILD SUCCESS
+#13 17.09 [INFO] ------------------------------------------------------------------------
+#13 17.09 [INFO] Total time:  16.051 s
+#13 17.09 [INFO] Finished at: 2026-08-25T00:11:57Z
+#13 17.09 [INFO] ------------------------------------------------------------------------
+#13 DONE 17.3s
+
+#14 [stage-1 2/4] WORKDIR /app
+#14 CACHED
+
+#15 [stage-1 3/4] RUN apt-get update && apt-get install -y --no-install-recommends         curl         latexmk         texlive-latex-base         texlive-latex-recommended         texlive-latex-extra         texlive-fonts-recommended         texlive-fonts-extra         texlive-lang-portuguese         texlive-science         texlive-pictures         texlive-plain-generic         texlive-luatex         texlive-publishers         texlive-bibtex-extra biber         ghostscript     && rm -rf /var/lib/apt/lists/*     && printf '%s\n'         '\documentclass{article}'         '\usepackage[utf8]{inputenc}'         '\usepackage[brazil]{babel}'         '\usepackage{amsmath,siunitx,booktabs,longtable,tabularx,graphicx}'         '\usepackage{fancyhdr,lastpage,enumitem,xcolor,hyperref,tikz,pgfplots}'         '\begin{document}\section{OK}$\sigma=\frac{F}{A}$\end{document}'         > /tmp/smoke.tex     && cd /tmp && latexmk -pdf -interaction=nonstopmode -no-shell-escape smoke.tex     && test -s /tmp/smoke.pdf     && printf '%s\n'         '\documentclass{abntex2}'         '\begin{document}\section{OK}abntex2 disponivel\end{document}'         > /tmp/abnt.tex     && latexmk -pdf -interaction=nonstopmode -no-shell-escape abnt.tex     && test -s /tmp/abnt.pdf     && printf '%s\n'         '%!PS-Adobe-3.0 EPSF-3.0' '%%BoundingBox: 0 0 100 100'         '0 0 moveto 100 100 lineto stroke showpage' > /tmp/smoke.eps     && gs -dNOPAUSE -dBATCH -dQUIET -sDEVICE=pdfwrite -dEPSCrop           -sOutputFile=/tmp/smoke_eps.pdf /tmp/smoke.eps     && test -s /tmp/smoke_eps.pdf     && rm -rf /tmp/smoke.* /tmp/abnt.* /tmp/smoke_eps.pdf
+#15 CACHED
+
+#16 [stage-1 4/4] COPY --from=builder /app/target/*.jar app.jar
+#16 DONE 0.1s
+
+#17 exporting to image
+#17 exporting layers
+#17 exporting layers 1.2s done
+#17 exporting manifest sha256:c90ca9798452fafd31fc1f9de8259c15b55a68ea14359af8b847b57a57b98b34 0.0s done
+#17 exporting config sha256:46720127af668cc064f565a6eaa65659336ba3571ad9657ed92ff7d7a01e39f9 0.0s done
+#17 exporting attestation manifest sha256:58d82fe0b78e19c8cdbe006207c2f47d36e65095ecfbc6aeced73f6edb5bb943 0.0s done
+#17 exporting manifest list sha256:b9fdfff1f595e4505d44f3d3c5e6fdfdc4023481a75b086ba96f4ccc2768d184 0.0s done
+#17 naming to docker.io/library/lab-dms-backend:latest
+#17 naming to docker.io/library/lab-dms-backend:latest done
+#17 unpacking to docker.io/library/lab-dms-backend:latest
+#17 unpacking to docker.io/library/lab-dms-backend:latest 0.3s done
+#17 DONE 1.6s
+
+#18 resolving provenance for metadata file
+#18 DONE 0.0s
+ lab-dms-backend  Built
+   codigo de saida: 0 
+ 
+[4] SUBINDO TUDO 
+ Container lab-dms-postgres  Recreate
+ Container lab-dms-redis  Recreate
+ Container lab-dms-redis  Recreated
+ Container lab-dms-postgres  Recreated
+ Container lab-dms-backend  Recreate
+ Container lab-dms-backend  Recreated
+ Container lab-dms-frontend  Recreate
+ Container lab-dms-frontend  Recreated
+ Container lab-dms-redis  Starting
+ Container lab-dms-postgres  Starting
+ Container lab-dms-postgres  Started
+ Container lab-dms-redis  Started
+ Container lab-dms-postgres  Waiting
+ Container lab-dms-postgres  Healthy
+ Container lab-dms-backend  Starting
+ Container lab-dms-backend  Started
+ Container lab-dms-backend  Waiting
+ Container lab-dms-backend  Healthy
+ Container lab-dms-frontend  Starting
+ Container lab-dms-frontend  Started
+ 
+[5] ESPERANDO O BACKEND 
+   health: 200 
+ 
+[6] MIGRACOES (esperado: 14 no topo) 
+ version |          description          | success 
+---------+-------------------------------+---------
+ 14      | Clean start no demo documents | t
+ 13      | Reset documents keep users    | t
+ 12      | Branding                      | t
+(3 rows)
+
+ 
+[7] UTILIZADORES 
+       email        | status | tam_hash 
+--------------------+--------+----------
+ admin@email.com    | ACTIVE |       60
+ member@email.com   | ACTIVE |       60
+ reader@email.com   | ACTIVE |       60
+ reviewer@email.com | ACTIVE |       60
+ writer@email.com   | ACTIVE |       60
+(5 rows)
+
+ 
+[8] BASE LIMPA? (esperado: documentos=0 versoes=0 auditoria=0 usuarios=5) 
+ documentos | versoes | auditoria | usuarios 
+------------+---------+-----------+----------
+          0 |       0 |         0 |        5
+(1 row)
+
+ 
+[9] LOGIN admin@email.com / 123456 
+   http: 200 
+   token obtido 
+ 
+[10] CRIANDO UM DOCUMENTO COM FONTE LATEX 
+   http: 201 
+{"id":"4fe97fde-1d1f-4eb8-b755-3037426ccfed","code":"PO-001","title":"Teste automatico do visualizador","docType":"PO","documentGroupId":null,"currentCommitId":"6b766593-d0b7-4bc3-921b-6575ef182576","officialCommitId":"6b766593-d0b7-4bc3-921b-6575ef182576","assignedReviewerId":null,"status":"DRAFT","createdBy":"1b2dcc85-06e7-4334-8fd2-8bc1786e48c8","tags":[],"reviewIntervalMonths":24,"nextReviewDate":"2028-08-25","lastReviewedAt":null,"reviewOverdue":false,"retentionYears":5,"createdAt":"2026-08-25T00:13:11.804341079Z","updatedAt":"2026-08-25T00:13:11.828367189Z"} 
+   commit atual: 6b766593-d0b7-4bc3-921b-6575ef182576 
+ 
+[11] PRE-VISUALIZACAO DO PROJETO  (POST /latex/preview/project/%commit%) 
+     E EXATAMENTE o que o editor chama ao carregar em Compilar. 
+   http: 200 
+   PDF VALIDO: 26424 bytes -- PRE-VISUALIZACAO OK
+   --- cabecalhos --- 
+HTTP/1.1 200 
+Vary: Origin
+Vary: Access-Control-Request-Method
+Vary: Access-Control-Request-Headers
+X-Pdf-Pages: 1
+X-Latex-Problems: 0
+Access-Control-Expose-Headers: X-Pdf-Pages, X-Latex-Problems, X-Latex-Error-List
+Accept-Ranges: bytes
+X-Content-Type-Options: nosniff
+X-XSS-Protection: 0
+Cache-Control: no-cache, no-store, max-age=0, must-revalidate
+Pragma: no-cache
+Expires: 0
+X-Frame-Options: DENY
+Content-Type: application/pdf
+Content-Length: 26424
+Date: Tue, 25 Aug 2026 00:13:15 GMT
+
+ 
+[12] COMPILAR E GRAVAR  (POST /latex/compile/%commit%) 
+   http: 200 
+{"id":"f99f0156-3b4c-499d-adf8-d4d537da86ec","commitId":"6b766593-d0b7-4bc3-921b-6575ef182576","status":"SUCCESS","compilationLog":"...(truncated)...\n2021/07/09 v1.2t Portuguese support from the babel system\nPackage babel Info: Hyphen rules for 'brazil' set to \\l@portuguese\n(babel)             (\\language4). Reported on input line 111.\nPackage babel Info: Making \" an active character on input line 143.\n)) (/usr/share/texlive/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def\nFile: l3backend-pdftex.def 2022-01-12 L3 backend support: PDF output (pdfTeX)\n\\l__color_backend_stack_int=\\count195\n\\l__pdf_internal_box=\\box50\n) (./document.aux)\n\\openout1 = `document.aux'.\n\nLaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 6.\nLaTeX Font Info:    ... okay on input line 6.\nLaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 6.\nLaTeX Font Info:    ... okay on input line 6.\nLaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 6.\nLaTeX Font Info:    ... okay on input line 6.\nLaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 6.\nLaTeX Font Info:    ... okay on input line 6.\nLaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 6.\nLaTeX Font Info:    ... okay on input line 6.\nLaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 6.\nLaTeX Font Info:    ... okay on input line 6.\nLaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 6.\nLaTeX Font Info:    ... okay on input line 6.\nLaTeX Font Info:    External font `cmex10' loaded for size\n(Font)              <14.4> on input line 7.\nLaTeX Font Info:    External font `cmex10' loaded for size\n(Font)              <7> on input line 7.\n\n\nLaTeX Warning: No \\author given.\n\n[1\n\n{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}] (./document.aux) ) \nHere is how much of TeX's memory you used:\n 1631 strings out of 480154\n 26883 string characters out of 5893788\n 325891 words of memory out of 5000000\n 19643 multiletter control sequences out of 15000+600000\n 474319 words of font info for 37 fonts, out of 8000000 for 9000\n 61 hyphenation exceptions out of 8191\n 40i,6n,52p,184b,197s stack positions out of 5000i,500n,10000p,200000b,80000s\n </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1200.600pk> </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1728.600pk> </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1440.600pk> </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm2074.600pk>\nOutput written on document.pdf (1 page, 26424 bytes).\nPDF statistics:\n 101 PDF objects out of 1000 (max. 8388607)\n 20 compressed objects within 1 object stream\n 0 named destinations out of 1000 (max. 500000)\n 1 words of extra memory for PDF output out of 10000 (max. 10000000)\n\n\nRc files read:\n  NONE\nLatexmk: This is Latexmk, John Collins, 20 November 2021, version: 4.76.\nRule 'pdflatex': File changes, etc:\n   Changed files, or newly in use since previous run(s):\n      './document.tex'\n------------\nRun number 1 of rule 'pdflatex'\n------------\n------------\nRunning 'pdflatex  -interaction=nonstopmode -no-shell-escape -file-line-error -recorder  \"./document.tex\"'\n------------\nLatexmk: applying rule 'pdflatex'...\nThis is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex)\nentering extended mode\n(./document.tex\nLaTeX2e <2021-11-15> patch level 1\nL3 programming layer <2022-01-21> (/usr/share/texlive/texmf-dist/tex/latex/base/article.cls\nDocument Class: article 2021/10/04 v1.4n Standard LaTeX document class\n(/usr/share/texlive/texmf-dist/tex/latex/base/size12.clo)) (/usr/share/texlive/texmf-dist/tex/latex/base/inputenc.sty) (/usr/share/texlive/texmf-dist/tex/latex/base/fontenc.sty) (/usr/share/texlive/texmf-dist/tex/generic/babel/babel.sty (/usr/share/texlive/texmf-dist/tex/generic/babel/txtbabel.def) (/usr/share/texlive/texmf-dist/tex/generic/babel-portuges/brazil.ldf)) (/usr/share/texlive/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def) (./document.aux)\n\nLaTeX Warning: No \\author given.\n\n[1{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}] (./document.aux)\nkpathsea: Running mktexpk --mfmode / --bdpi 600 --mag 1+0/600 --dpi 600 ecrm1200\nmktexpk: Running mf-nowin -progname=mf \\mode:=ljfour; mag:=1+0/600; nonstopmode; input ecrm1200\nThis is METAFONT, Version 2.71828182 (TeX Live 2022/dev/Debian) (preloaded base=mf)\n\n(/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/ecrm1200.mf (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exbase.mf) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/ecrm.mf (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exroman.mf\n Ok (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exaccess.mf\n Ok) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/expseudo.mf\n Ok) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exruwest.mf\n Ok [192] [193] [194] [195] [196] [197] [198] [199] [200] [201] [202] [203] [204] [205] [206] [207] [208] [209] [210] [211] [212] [213] [214] [215] [216] [217] [218] [219] [220] [221] [222] [223]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrlwest.mf\n Ok [224] [225] [226] [227] [228] [229] [230] [231] [232] [233] [234] [235] [236] [237] [238] [239] [240] [241] [242] [243] [244] [245] [246] [247] [248] [249] [250] [251] [252] [253] [254] [255]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrueast.mf\n Ok [128] [129] [130] [131] [132] [133] [134] [135] [136] [137] [138] [139] [140] [141] [142] [143] [144] [145] [146] [147] [148] [149] [150] [151] [152] [153] [154] [155] [156] [157]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrleast.mf\n Ok [158] [160] [161] [162] [163] [164] [165] [166] [167] [168] [169] [170] [171] [172] [173] [174] [175] [176] [177] [178] [179] [180] [181] [182] [183] [184] [185] [186] [187] [188]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exbraces.mf\n Ok [94] [126] [23] [40] [41] [60] [124] [62] [91] [93] [92] [123] [125] [95] [127] [32]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/expunct.mf\n Ok [14] [15] [19] [20] [13] [18] [33] [39] [42] [43] [44] [46] [47] [58] [59] [61] [96] [189] [17] [45] [16] [21] [22]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exaccent.mf\n Ok [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10] [11] [12]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exsign.mf\n Ok [24] [34] [35] [36] [37] [64] [191] [159]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrlig.mf\n Ok [25] [26] [28] [27] [29] [30] [31]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exromp.mf\n Ok [38] [63] [190]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrulett.mf\n Ok [65] [66] [67] [68] [69] [70] [71] [72] [73] [74] [75] [76] [77] [78] [79] [80] [81] [82] [83] [84] [85] [86] [87] [88] [89] [90]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrllett.mf\n Ok [97] [98] [99] [100] [101] [102] [103] [104] [105] [106] [107] [108] [109] [110] [111] [112] [113] [114] [115] [116] [117] [118] [119] [120] [121] [122]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrdigit.mf\n Ok [48] [49] [50] [51] [52] [53] [54] [55] [56] [57]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrligtb.mf\n Ok) ) ) )\n(some charht values had to be adjusted by as much as 0.07143pt)\nFont metrics written on ecrm1200.tfm.\nOutput written on ecrm1200.600gf (256 characters, 60320 bytes).\nTranscript written on ecrm1200.log.\nmktexpk: /root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1200.600pk: successfully generated.\n ) </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1200.600pk>\nkpathsea: Running mktexpk --mfmode / --bdpi 600 --mag 1+0/600 --dpi 600 ecbx1728\nmktexpk: Running mf-nowin -progname=mf \\mode:=ljfour; mag:=1+0/600; nonstopmode; input ecbx1728\nThis is METAFONT, Version 2.71828182 (TeX Live 2022/dev/Debian) (preloaded base=mf)\n\n(/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/ecbx1728.mf (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exbase.mf) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/ecbx.mf (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exroman.mf\n Ok (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exaccess.mf\n Ok) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/expseudo.mf\n Ok) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exruwest.mf\n Ok [192] [193] [194] [195] [196] [197] [198] [199] [200] [201] [202] [203] [204] [205] [206] [207] [208] [209] [210] [211] [212] [213] [214] [215] [216] [217] [218] [219] [220] [221] [222] [223]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrlwest.mf\n Ok [224] [225] [226] [227] [228] [229] [230] [231] [232] [233] [234] [235] [236] [237] [238] [239] [240] [241] [242] [243] [244] [245] [246] [247] [248] [249] [250] [251] [252] [253] [254] [255]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrueast.mf\n Ok [128] [129] [130] [131] [132] [133] [134] [135] [136] [137] [138] [139] [140] [141] [142] [143] [144] [145] [146] [147] [148] [149] [150] [151] [152] [153] [154] [155] [156] [157]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrleast.mf\n Ok [158] [160] [161] [162] [163] [164] [165] [166] [167] [168] [169] [170] [171] [172] [173] [174] [175] [176] [177] [178] [179] [180] [181] [182] [183] [184] [185] [186] [187] [188]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exbraces.mf\n Ok [94] [126] [23] [40] [41] [60] [124] [62] [91] [93] [92] [123] [125] [95] [127] [32]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/expunct.mf\n Ok [14] [15] [19] [20] [13] [18] [33] [39] [42] [43] [44] [46] [47] [58] [59] [61] [96] [189] [17] [45] [16] [21] [22]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exaccent.mf\n Ok [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10] [11] [12]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exsign.mf\n Ok [24] [34] [35] [36] [37] [64] [191] [159]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrlig.mf\n Ok [25] [26] [28] [27] [29] [30] [31]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exromp.mf\n Ok [38] [63] [190]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrulett.mf\n Ok [65] [66] [67] [68] [69] [70] [71] [72] [73] [74] [75] [76] [77] [78] [79] [80] [81] [82] [83] [84] [85] [86] [87] [88] [89] [90]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrllett.mf\n Ok [97] [98] [99] [100] [101] [102] [103] [104] [105] [106] [107] [108] [109] [110] [111] [112] [113] [114] [115] [116] [117] [118] [119] [120] [121] [122]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrdigit.mf\n Ok [48] [49] [50] [51] [52] [53] [54] [55] [56] [57]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrligtb.mf\n Ok) ) ) )\n(some charht values had to be adjusted by as much as 0.13197pt)\nFont metrics written on ecbx1728.tfm.\nOutput written on ecbx1728.600gf (256 characters, 84848 bytes).\nTranscript written on ecbx1728.log.\nmktexpk: /root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1728.600pk: successfully generated.\n </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1728.600pk>\nkpathsea: Running mktexpk --mfmode / --bdpi 600 --mag 1+0/600 --dpi 600 ecrm1440\nmktexpk: Running mf-nowin -progname=mf \\mode:=ljfour; mag:=1+0/600; nonstopmode; input ecrm1440\nThis is METAFONT, Version 2.71828182 (TeX Live 2022/dev/Debian) (preloaded base=mf)\n\n(/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/ecrm1440.mf (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exbase.mf) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/ecrm.mf (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exroman.mf\n Ok (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exaccess.mf\n Ok) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/expseudo.mf\n Ok) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exruwest.mf\n Ok [192] [193] [194] [195] [196] [197] [198] [199] [200] [201] [202] [203] [204] [205] [206] [207] [208] [209] [210] [211] [212] [213] [214] [215] [216] [217] [218] [219] [220] [221] [222] [223]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrlwest.mf\n Ok [224] [225] [226] [227] [228] [229] [230] [231] [232] [233] [234] [235] [236] [237] [238] [239] [240] [241] [242] [243] [244] [245] [246] [247] [248] [249] [250] [251] [252] [253] [254] [255]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrueast.mf\n Ok [128] [129] [130] [131] [132] [133] [134] [135] [136] [137] [138] [139] [140] [141] [142] [143] [144] [145] [146] [147] [148] [149] [150] [151] [152] [153] [154] [155] [156] [157]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrleast.mf\n Ok [158] [160] [161] [162] [163] [164] [165] [166] [167] [168] [169] [170] [171] [172] [173] [174] [175] [176] [177] [178] [179] [180] [181] [182] [183] [184] [185] [186] [187] [188]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exbraces.mf\n Ok [94] [126] [23] [40] [41] [60] [124] [62] [91] [93] [92] [123] [125] [95] [127] [32]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/expunct.mf\n Ok [14] [15] [19] [20] [13] [18] [33] [39] [42] [43] [44] [46] [47] [58] [59] [61] [96] [189] [17] [45] [16] [21] [22]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exaccent.mf\n Ok [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10] [11] [12]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exsign.mf\n Ok [24] [34] [35] [36] [37] [64] [191] [159]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrlig.mf\n Ok [25] [26] [28] [27] [29] [30] [31]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exromp.mf\n Ok [38] [63] [190]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrulett.mf\n Ok [65] [66] [67] [68] [69] [70] [71] [72] [73] [74] [75] [76] [77] [78] [79] [80] [81] [82] [83] [84] [85] [86] [87] [88] [89] [90]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrllett.mf\n Ok [97] [98] [99] [100] [101] [102] [103] [104] [105] [106] [107] [108] [109] [110] [111] [112] [113] [114] [115] [116] [117] [118] [119] [120] [121] [122]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrdigit.mf\n Ok [48] [49] [50] [51] [52] [53] [54] [55] [56] [57]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrligtb.mf\n Ok) ) ) )\n(some charht values had to be adjusted by as much as 0.08084pt)\nFont metrics written on ecrm1440.tfm.\nOutput written on ecrm1440.600gf (256 characters, 71064 bytes).\nTranscript written on ecrm1440.log.\nmktexpk: /root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1440.600pk: successfully generated.\n </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1440.600pk>\nkpathsea: Running mktexpk --mfmode / --bdpi 600 --mag 1+0/600 --dpi 600 ecrm2074\nmktexpk: Running mf-nowin -progname=mf \\mode:=ljfour; mag:=1+0/600; nonstopmode; input ecrm2074\nThis is METAFONT, Version 2.71828182 (TeX Live 2022/dev/Debian) (preloaded base=mf)\n\n(/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/ecrm2074.mf (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exbase.mf) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/ecrm.mf (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exroman.mf\n Ok (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exaccess.mf\n Ok) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/expseudo.mf\n Ok) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exruwest.mf\n Ok [192] [193] [194] [195] [196] [197] [198] [199] [200] [201] [202] [203] [204] [205] [206] [207] [208] [209] [210] [211] [212] [213] [214] [215] [216] [217] [218] [219] [220] [221] [222] [223]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrlwest.mf\n Ok [224] [225] [226] [227] [228] [229] [230] [231] [232] [233] [234] [235] [236] [237] [238] [239] [240] [241] [242] [243] [244] [245] [246] [247] [248] [249] [250] [251] [252] [253] [254] [255]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrueast.mf\n Ok [128] [129] [130] [131] [132] [133] [134] [135] [136] [137] [138] [139] [140] [141] [142] [143] [144] [145] [146] [147] [148] [149] [150] [151] [152] [153] [154] [155] [156] [157]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrleast.mf\n Ok [158] [160] [161] [162] [163] [164] [165] [166] [167] [168] [169] [170] [171] [172] [173] [174] [175] [176] [177] [178] [179] [180] [181] [182] [183] [184] [185] [186] [187] [188]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exbraces.mf\n Ok [94] [126] [23] [40] [41] [60] [124] [62] [91] [93] [92] [123] [125] [95] [127] [32]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/expunct.mf\n Ok [14] [15] [19] [20] [13] [18] [33] [39] [42] [43] [44] [46] [47] [58] [59] [61] [96] [189] [17] [45] [16] [21] [22]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exaccent.mf\n Ok [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10] [11] [12]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exsign.mf\n Ok [24] [34] [35] [36] [37] [64] [191] [159]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrlig.mf\n Ok [25] [26] [28] [27] [29] [30] [31]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exromp.mf\n Ok [38] [63] [190]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrulett.mf\n Ok [65] [66] [67] [68] [69] [70] [71] [72] [73] [74] [75] [76] [77] [78] [79] [80] [81] [82] [83] [84] [85] [86] [87] [88] [89] [90]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrllett.mf\n Ok [97] [98] [99] [100] [101] [102] [103] [104] [105] [106] [107] [108] [109] [110] [111] [112] [113] [114] [115] [116] [117] [118] [119] [120] [121] [122]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrdigit.mf\n Ok [48] [49] [50] [51] [52] [53] [54] [55] [56] [57]) (/usr/share/texlive/texmf-dist/fonts/source/jknappen/ec/exrligtb.mf\n Ok) ) ) )\n(some charht values had to be adjusted by as much as 0.1171pt)\nFont metrics written on ecrm2074.tfm.\nOutput written on ecrm2074.600gf (256 characters, 101464 bytes).\nTranscript written on ecrm2074.log.\nmktexpk: /root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm2074.600pk: successfully generated.\n </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm2074.600pk>\nOutput written on document.pdf (1 page, 26424 bytes).\nTranscript written on document.log.\nLatexmk: Log file says output to 'document.pdf'\nRule 'pdflatex': File changes, etc:\n   Changed files, or newly in use since previous run(s):\n      'document.aux'\n------------\nRun number 2 of rule 'pdflatex'\n------------\n------------\nRunning 'pdflatex  -interaction=nonstopmode -no-shell-escape -file-line-error -recorder  \"./document.tex\"'\n------------\nLatexmk: Examining 'document.log'\n=== TeX engine is 'pdfTeX'\nLatexmk: applying rule 'pdflatex'...\nThis is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex)\nentering extended mode\n(./document.tex\nLaTeX2e <2021-11-15> patch level 1\nL3 programming layer <2022-01-21> (/usr/share/texlive/texmf-dist/tex/latex/base/article.cls\nDocument Class: article 2021/10/04 v1.4n Standard LaTeX document class\n(/usr/share/texlive/texmf-dist/tex/latex/base/size12.clo)) (/usr/share/texlive/texmf-dist/tex/latex/base/inputenc.sty) (/usr/share/texlive/texmf-dist/tex/latex/base/fontenc.sty) (/usr/share/texlive/texmf-dist/tex/generic/babel/babel.sty (/usr/share/texlive/texmf-dist/tex/generic/babel/txtbabel.def) (/usr/share/texlive/texmf-dist/tex/generic/babel-portuges/brazil.ldf)) (/usr/share/texlive/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def) (./document.aux)\n\nLaTeX Warning: No \\author given.\n\n[1{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}] (./document.aux) ) </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1200.600pk> </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1728.600pk> </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1440.600pk> </root/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm2074.600pk>\nOutput written on document.pdf (1 page, 26424 bytes).\nTranscript written on document.log.\nLatexmk: Log file says output to 'document.pdf'\nLatexmk: Examining 'document.log'\n=== TeX engine is 'pdfTeX'\nLatexmk: All targets (document.pdf) are up-to-date\n","hasPdf":true,"compiledAt":"2026-08-25T00:13:15.412741741Z"} 
+ 
+[13] BUSCAR O PDF GRAVADO  (GET /latex/pdf/%commit%) 
+   http: 200 
+   PDF servido: 26424 bytes -- OK
+ 
+[14] LISTAR DOCUMENTOS  (a chamada que dava 500) 
+   http: 200 
+   documentos devolvidos: 1
+ 
+[15] LOGIN DOS OUTROS UTILIZADORES 
+   writer@email.com -> 200 
+   reviewer@email.com -> 200 
+   member@email.com -> 200 
+   reader@email.com -> 200 
+ 
+[16] REMOVENDO O DOCUMENTO DE TESTE 
+     Para que executar isto outra vez continue a mostrar a base limpa. 
+TRUNCATE TABLE
+ documentos | usuarios 
+------------+----------
+          0 |        5
+(1 row)
+
+ 
+[17] ERROS DO BACKEND 
+lab-dms-backend  |         user_roles ur 
+lab-dms-backend  |             ON r.id = ur.role_id     
+lab-dms-backend  |     WHERE
+lab-dms-backend  |         ur.user_id = ? 
+lab-dms-backend  | Hibernate: 
+lab-dms-backend  |     select
+lab-dms-backend  |         uje1_0.id,
+lab-dms-backend  |         uje1_0.created_at,
+lab-dms-backend  |         uje1_0.email,
+lab-dms-backend  |         uje1_0.full_name,
+lab-dms-backend  |         uje1_0.last_login,
+lab-dms-backend  |         uje1_0.password_hash,
+lab-dms-backend  |         uje1_0.status,
+lab-dms-backend  |         uje1_0.updated_at,
+lab-dms-backend  |         uje1_0.username 
+lab-dms-backend  |     from
+lab-dms-backend  |         users uje1_0 
+lab-dms-backend  |     where
+lab-dms-backend  |         uje1_0.username=?
+lab-dms-backend  | Hibernate: 
+lab-dms-backend  |     SELECT
+lab-dms-backend  |         p.code 
+lab-dms-backend  |     FROM
+lab-dms-backend  |         permissions p     
+lab-dms-backend  |     JOIN
+lab-dms-backend  |         role_permissions rp 
+lab-dms-backend  |             ON p.id = rp.permission_id     
+lab-dms-backend  |     JOIN
+lab-dms-backend  |         user_roles ur 
+lab-dms-backend  |             ON rp.role_id = ur.role_id     
+lab-dms-backend  |     WHERE
+lab-dms-backend  |         ur.user_id = ?     
+lab-dms-backend  |     UNION
+lab-dms-backend  |     SELECT
+lab-dms-backend  |         r.name 
+lab-dms-backend  |     FROM
+lab-dms-backend  |         roles r     
+lab-dms-backend  |     JOIN
+lab-dms-backend  |         user_roles ur 
+lab-dms-backend  |             ON r.id = ur.role_id     
+lab-dms-backend  |     WHERE
+lab-dms-backend  |         ur.user_id = ? 
+lab-dms-backend  | Hibernate: 
+lab-dms-backend  |     select
+lab-dms-backend  |         uje1_0.id,
+lab-dms-backend  |         uje1_0.created_at,
+lab-dms-backend  |         uje1_0.email,
+lab-dms-backend  |         uje1_0.full_name,
+lab-dms-backend  |         uje1_0.last_login,
+lab-dms-backend  |         uje1_0.password_hash,
+lab-dms-backend  |         uje1_0.status,
+lab-dms-backend  |         uje1_0.updated_at,
+lab-dms-backend  |         uje1_0.username 
+lab-dms-backend  |     from
+lab-dms-backend  |         users uje1_0 
+lab-dms-backend  |     where
+lab-dms-backend  |         uje1_0.username=?
+lab-dms-backend  | Hibernate: 
+lab-dms-backend  |     SELECT
+lab-dms-backend  |         p.code 
+lab-dms-backend  |     FROM
+lab-dms-backend  |         permissions p     
+lab-dms-backend  |     JOIN
+lab-dms-backend  |         role_permissions rp 
+lab-dms-backend  |             ON p.id = rp.permission_id     
+lab-dms-backend  |     JOIN
+lab-dms-backend  |         user_roles ur 
+lab-dms-backend  |             ON rp.role_id = ur.role_id     
+lab-dms-backend  |     WHERE
+lab-dms-backend  |         ur.user_id = ?     
+lab-dms-backend  |     UNION
+lab-dms-backend  |     SELECT
+lab-dms-backend  |         r.name 
+lab-dms-backend  |     FROM
+lab-dms-backend  |         roles r     
+lab-dms-backend  |     JOIN
+lab-dms-backend  |         user_roles ur 
+lab-dms-backend  |             ON r.id = ur.role_id     
+lab-dms-backend  |     WHERE
+lab-dms-backend  |         ur.user_id = ? 
+ 
+================== FIM ================== 

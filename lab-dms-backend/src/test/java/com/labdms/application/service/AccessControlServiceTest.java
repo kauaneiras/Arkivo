@@ -198,6 +198,87 @@ class AccessControlServiceTest {
                 .doesNotThrowAnyException();
     }
 
+    /**
+     * As duas causas de recusa que partilhavam a mesma mensagem.
+     *
+     * <p>Quem tinha REVIEW_APPROVE mas estava fora do setor recebia "você não
+     * tem permissão para aprovar revisões" — uma frase falsa, que manda a pessoa
+     * pedir um papel que já tem. Estes testes fixam a distinção: o motivo viaja
+     * na exceção, e é por ele que a mensagem é escolhida.
+     */
+    @Test
+    void tellsSectorRefusalApartFromMissingPermission() {
+        UUID documentId = UUID.randomUUID();
+        Document document = documentBy(UUID.randomUUID());
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser()));
+        when(userRepository.findUserPermissions(userId)).thenReturn(List.of("REVIEW_APPROVE"));
+        when(documentRepository.findById(documentId)).thenReturn(Optional.of(document));
+        when(userRepository.hasGroupAccess(userId, groupId)).thenReturn(false);
+
+        assertThatThrownBy(() -> accessControlService.assertCanApprove(userId, documentId))
+                .isInstanceOf(UnauthorizedAccessException.class)
+                .satisfies(e -> assertThat(((UnauthorizedAccessException) e).getArgs())
+                        .containsExactly("approve_not_in_sector"));
+    }
+
+    @Test
+    void missingPermissionStillReportsMissingPermission() {
+        UUID documentId = UUID.randomUUID();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser()));
+        when(userRepository.findUserPermissions(userId)).thenReturn(List.of("DOCUMENT_EDIT"));
+
+        assertThatThrownBy(() -> accessControlService.assertCanApprove(userId, documentId))
+                .isInstanceOf(UnauthorizedAccessException.class)
+                .satisfies(e -> assertThat(((UnauthorizedAccessException) e).getArgs())
+                        .containsExactly("approve"));
+    }
+
+    /**
+     * Um administrador não fica preso ao setor.
+     *
+     * <p>Ele já vê e edita tudo por DOCUMENT_EDIT_ALL, por isso travá-lo aqui
+     * não protegia nada — só deixava trabalho parado quando o setor do documento
+     * não tinha nenhum revisor dentro.
+     */
+    @Test
+    void administratorApprovesOutsideTheSector() {
+        UUID documentId = UUID.randomUUID();
+        Document document = documentBy(UUID.randomUUID());
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser()));
+        when(userRepository.findUserPermissions(userId))
+                .thenReturn(List.of("REVIEW_APPROVE", "DOCUMENT_EDIT_ALL"));
+        when(documentRepository.findById(documentId)).thenReturn(Optional.of(document));
+
+        assertThatCode(() -> accessControlService.assertCanApprove(userId, documentId))
+                .doesNotThrowAnyException();
+    }
+
+    /**
+     * O revisor NOMEADO para o documento aprova mesmo estando fora do setor.
+     *
+     * <p>Sem isto havia uma armadilha silenciosa: criar um setor novo, pôr um
+     * documento nele e designar um revisor produzia um documento que ninguém
+     * conseguia aprovar — nem o próprio revisor nomeado — porque o setor
+     * recém-criado ainda não tinha membros. Ser nomeado para o trabalho diz mais
+     * do que pertencer ao setor.
+     */
+    @Test
+    void theDesignatedReviewerApprovesOutsideTheSector() {
+        UUID documentId = UUID.randomUUID();
+        Document document = documentBy(UUID.randomUUID());
+        document.setAssignedReviewerId(userId);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser()));
+        when(userRepository.findUserPermissions(userId)).thenReturn(List.of("REVIEW_APPROVE"));
+        when(documentRepository.findById(documentId)).thenReturn(Optional.of(document));
+
+        assertThatCode(() -> accessControlService.assertCanApprove(userId, documentId))
+                .doesNotThrowAnyException();
+    }
+
     @Test
     void deniesAllOperationsForAnUnknownUser() {
         when(userRepository.findById(userId)).thenReturn(Optional.empty());

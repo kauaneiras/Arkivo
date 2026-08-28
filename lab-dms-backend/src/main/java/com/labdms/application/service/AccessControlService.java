@@ -18,6 +18,17 @@ import java.util.UUID;
 @Service
 public class AccessControlService {
 
+    /**
+     * Uma recusa de autorização é escrita no log com a causa concreta.
+     *
+     * <p>O que a pessoa vê continua a ser uma frase curta — dizer-lhe que
+     * permissões possui seria contar-lhe o desenho do sistema. Mas quem opera o
+     * servidor precisa de conseguir responder "porquê?" sem adivinhar, e sem
+     * isto a resposta era sempre a mesma linha para causas diferentes.
+     */
+    private static final org.slf4j.Logger logger =
+            org.slf4j.LoggerFactory.getLogger(AccessControlService.class);
+
     private final UserRepository userRepository;
     private final DocumentRepository documentRepository;
 
@@ -84,13 +95,44 @@ public class AccessControlService {
     public void assertCanApprove(UUID userId, UUID documentId) {
         assertUserActive(userId);
         List<String> permissions = userRepository.findUserPermissions(userId);
+        boolean isAdmin = permissions.contains("DOCUMENT_EDIT_ALL");
+
         if (!permissions.contains("REVIEW_APPROVE")) {
+            logger.warn("Approval refused for user {} on document {}: no REVIEW_APPROVE. Held: {}",
+                    userId, documentId, permissions);
             throw new UnauthorizedAccessException("approve");
         }
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
-        if (!userRepository.hasGroupAccess(userId, document.getDocumentGroupId())) {
-            throw new UnauthorizedAccessException("approve");
+
+        // O setor não trava quem administra.
+        //
+        // Este passo dizia exatamente a mesma coisa que a falta de permissão —
+        // "você não tem permissão para aprovar revisões" — o que é falso e
+        // manda a pessoa procurar no sítio errado: ela TEM a permissão, o que
+        // lhe falta é pertencer ao setor do documento. Duas causas com uma só
+        // mensagem tornam o problema indiagnosticável de fora.
+        //
+        // Duas pessoas atravessam este passo, por razões diferentes.
+        //
+        // O administrador, porque já vê e edita tudo por DOCUMENT_EDIT_ALL:
+        // travá-lo aqui não protegia nada, apenas deixava o trabalho parado
+        // quando o setor certo não tinha revisor.
+        //
+        // E o revisor DESIGNADO para este documento, porque ter sido nomeado
+        // para o trabalho é uma afirmação mais forte do que pertencer ao setor.
+        // Sem esta parte havia uma armadilha silenciosa: criar um setor novo,
+        // pôr um documento nele e designar um revisor produzia um documento que
+        // ninguém — nem o próprio revisor nomeado — conseguia aprovar, porque o
+        // setor recém-criado ainda não tinha membros. E a recusa dizia-lhe que
+        // não tinha permissão de revisor, mandando-o procurar no sítio errado.
+        UUID group = document.getDocumentGroupId();
+        boolean isTheDesignatedReviewer = userId.equals(document.getAssignedReviewerId());
+        if (!isAdmin && !isTheDesignatedReviewer
+                && !userRepository.hasGroupAccess(userId, group)) {
+            logger.warn("Approval refused for user {} on document {}: not a member of sector {}",
+                    userId, documentId, group);
+            throw new UnauthorizedAccessException("approve_not_in_sector");
         }
 
         if (userId.equals(document.getCreatedBy())) {
@@ -98,7 +140,6 @@ public class AccessControlService {
         }
 
         UUID assigned = document.getAssignedReviewerId();
-        boolean isAdmin = permissions.contains("DOCUMENT_EDIT_ALL");
         if (assigned != null && !assigned.equals(userId) && !isAdmin) {
             throw new UnauthorizedAccessException("approve_not_assigned_reviewer");
         }

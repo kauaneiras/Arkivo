@@ -8,7 +8,7 @@ import {
 import { motion } from 'framer-motion';
 import { cn } from '../../lib/utils';
 import { useBranding } from '../../lib/branding';
-import { useI18n, type Lang } from '../../lib/i18n';
+import { useI18n, LANGUAGES, type Lang } from '../../lib/i18n';
 import NotificationBell from '../../components/NotificationBell';
 
 export default function DashboardLayout() {
@@ -90,22 +90,28 @@ export default function DashboardLayout() {
         </nav>
 
         <div className="p-4 border-t border-borderLight">
-          {/* Language switcher */}
-          <div className="flex gap-1 mb-3 px-1">
-            {(['pt', 'en'] as Lang[]).map((l) => (
-              <button
-                key={l}
-                onClick={() => setLang(l)}
-                className={cn(
-                  'flex-1 text-xs font-semibold py-1.5 rounded-md border transition-colors uppercase',
-                  lang === l
-                    ? 'bg-blue-50 text-primary border-blue-200'
-                    : 'text-textMuted border-transparent hover:bg-surface'
-                )}
-              >
-                {l === 'pt' ? 'PT' : 'EN'}
-              </button>
-            ))}
+          {/* Language switcher.
+
+              Uma lista e não uma fila de botões: com dois idiomas os botões
+              cabiam, com seis ficariam com três caracteres cada numa barra
+              estreita. Cada opção traz o nome escrito na própria língua, que é o
+              que permite a quem abriu o sistema num idioma que não lê encontrar
+              o seu — uma lista traduzida para uma língua que a pessoa não
+              entende não a ajuda a sair de lá. */}
+          <div className="mb-3 px-1">
+            <label htmlFor="lang-select" className="sr-only">{t('settings.language')}</label>
+            <select
+              id="lang-select"
+              value={lang}
+              onChange={(e) => setLang(e.target.value as Lang)}
+              className="w-full text-xs font-medium py-1.5 px-2 rounded-md border border-borderLight
+                         bg-surface text-textMain hover:border-primary/40 transition-colors
+                         focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              {LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>{l.label}</option>
+              ))}
+            </select>
           </div>
 
           <div className="flex items-center gap-3 mb-3 px-2">

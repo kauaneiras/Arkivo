@@ -116,22 +116,45 @@ public class DocumentService implements CreateDocumentUseCase, SearchDocumentsUs
         // Wire everything together
         mainBranch.advanceHead(initialCommit.getId());
         document.updateCurrentCommit(initialCommit.getId());
-        // A brand new document's only revision is also the one in force.
-        document.makeOfficial(initialCommit.getId());
         document.setAssignedReviewerId(command.assignedReviewerId());
         // ISO/IEC 17025 defaults when the caller does not specify: 24 months for
-        // periodic review (8.3.2 b) and 5 years retention (8.4). A document must
-        // never end up with NO review interval by accident — that is precisely
-        // the "review dates long past" finding.
+        // periodic review (8.3.2 b). A document must never end up with NO review
+        // interval by accident — that is precisely the "review dates long past"
+        // finding.
         document.setReviewIntervalMonths(
                 command.reviewIntervalMonths() != null ? command.reviewIntervalMonths() : 24);
-        document.setRetentionYears(
-                command.retentionYears() != null ? command.retentionYears() : 5);
 
-        // Persist in order
+        // Retention (8.4) defaults to keeping the document forever, expressed as
+        // 0 — the same "no limit" convention the review interval already uses.
+        //
+        // The default used to be 5 years. The two mistakes are not symmetrical:
+        // keeping a record longer than needed costs disk, while discarding one
+        // too early is unrecoverable and can be exactly the record an assessment
+        // asks for. Shortening the period is a decision for whoever knows the
+        // legal requirement of the test, so it has to be made on purpose.
+        document.setRetentionYears(
+                command.retentionYears() != null ? command.retentionYears() : 0);
+        // Start the clock now. An interval of 0 means "this document does not
+        // expire" and leaves the date unset, which is what keeps it out of the
+        // reminders instead of nagging about a review nobody should perform.
+        document.scheduleFirstReview(java.time.Instant.now());
+
+        // Persist in order. The order matters and is not arbitrary:
+        // documents.official_commit_id has a foreign key to commits(id), so the
+        // commit must EXIST before any row can point at it. Marking the new
+        // revision as the one in force before saving it violated that key and
+        // failed the whole creation with a 500.
+        //
+        // (documents.current_commit_id has no such key, which is why only the
+        // "in force" pointer failed — the constraint is right, the order was not.)
         Document savedDocument = documentRepository.save(document);
         branchRepository.save(mainBranch);
         commitRepository.save(initialCommit);
+
+        // Now that the commit exists, it can be declared the version in force.
+        // A brand new document's only revision is also its current one.
+        savedDocument.makeOfficial(initialCommit.getId());
+        savedDocument = documentRepository.save(savedDocument);
 
         // Audit
         // Uses the resolved `code` (explicit or auto-generated), never command.code():

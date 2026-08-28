@@ -89,13 +89,19 @@ public class LatexController {
      */
     private byte[] watermarkIfNeeded(UUID commitId, byte[] storedPdf) {
         try {
-            var row = jdbcTemplate.queryForMap("""
+            // LEFT JOIN, not JOIN: V9 made content_snapshot_id nullable, so a
+            // multi-file version legitimately has no single-string snapshot. An
+            // inner join returned no row for those, queryForMap threw, and the
+            // catch below turned a perfectly good PDF into a blocked download.
+            var rows = jdbcTemplate.queryForList("""
                     SELECT d.status, (d.official_commit_id = c.id) AS is_in_force, s.latex_source
                       FROM commits c
                       JOIN documents d ON d.id = c.document_id
-                      JOIN content_snapshots s ON s.id = c.content_snapshot_id
+                      LEFT JOIN content_snapshots s ON s.id = c.content_snapshot_id
                      WHERE c.id = ?
                     """, commitId);
+            if (rows.isEmpty()) return storedPdf;
+            var row = rows.get(0);
 
             String status = (String) row.get("status");
             boolean inForce = Boolean.TRUE.equals(row.get("is_in_force"));
@@ -104,8 +110,25 @@ public class LatexController {
                 return storedPdf;   // approved revision in force: nothing to mark
             }
 
-            String marked = com.labdms.shared.util.LatexWatermark.apply(
-                    (String) row.get("latex_source"), kind);
+            // A DRAFT does not get stamped here. The editor already says the
+            // document is a draft on screen, and stamping meant recompiling the
+            // whole project on EVERY preview load — slow, and a failure in that
+            // recompilation blocked a PDF that was perfectly readable. The stamp
+            // is a control against a document circulating as if approved, which
+            // is what the download and the obsolete/superseded cases are for.
+            if (kind == com.labdms.shared.util.LatexWatermark.Kind.DRAFT) {
+                return storedPdf;
+            }
+
+            String source = (String) row.get("latex_source");
+            if (source == null || source.isBlank()) {
+                // Nothing to inject the watermark into. Better to serve the
+                // document than to block it over a missing snapshot.
+                logger.warn("Commit {} has no text snapshot to watermark; serving as stored", commitId);
+                return storedPdf;
+            }
+
+            String marked = com.labdms.shared.util.LatexWatermark.apply(source, kind);
 
             // Compile the marked ROOT inside the version's own tree. Compiling it
             // standalone works only for single-file documents: a root that does

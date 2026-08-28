@@ -1,0 +1,43 @@
+============================================== 
+ LAB DMS - o caminho do navegador (nginx:3000) 
+ 24/08/2026 21:22:06,13                                 
+============================================== 
+ 
+[1] A PAGINA CARREGA? 
+   http: 200  tipo: text/html 
+ 
+[2] O PACOTE JS E O WORKER DO PDF.JS 
+    "Failed to load PDF file" quase sempre e o worker faltando. 
+   /assets/index-Ci0ObjjP.js
+   pacote principal: /assets/index-Ci0ObjjP.js 
+   pacote -^> http: 200  tipo: application/javascript 
+   worker referenciado: /assets/pdf.worker.min-qwK7q_zL.mjs
+   worker -> 200 text/javascript
+   MIME DE JAVASCRIPT -- o worker do pdf.js arranca
+ 
+[3] LOGIN PELO PROXY 
+   http: 200 
+   token obtido 
+ 
+[4] PRE-VISUALIZACAO AO VIVO PELO PROXY 
+    Com o MESMO cabecalho Accept que o axios manda. 
+   http: 200 
+   PDF INTEIRO PELO PROXY: 12383 bytes -- OK
+   --- cabecalhos que o navegador recebe --- 
+   HTTP/1.1 200
+   Content-Type: application/pdf
+   Content-Length: 12383
+   X-Pdf-Pages: 1
+   X-Latex-Problems: 0
+   Access-Control-Expose-Headers: X-Pdf-Pages, X-Latex-Problems, X-Latex-Error-List
+   X-Content-Type-Options: nosniff
+ 
+[5] O MESMO PEDIDO DIRETO NA 8080, PARA COMPARAR 
+   http: 200 
+   proxy: 12383 bytes   direto: 12383 bytes
+   IDENTICOS -- o nginx nao mexe no PDF
+ 
+[6] LISTAR DOCUMENTOS PELO PROXY 
+   http: 200 
+ 
+================== FIM ================== 

@@ -460,10 +460,19 @@ public class ProjectFileController {
         //
         // Editing is not blocked, only editing IN PLACE: the user saves a new
         // version (which copies the tree) and edits that.
-        if (commit.equals(doc.getOfficialCommitId())) {
+        //
+        // The status check matters as much as the pointer check. A brand new
+        // document is created with current_commit_id == official_commit_id, so
+        // testing the pointer alone refused the very first upload into a
+        // document that had just been created — the user could not import their
+        // Overleaf ZIP until they had saved a second version, for no reason.
+        // What must not be rewritten is an APPROVED record; a draft has never
+        // been approved, and editing it is ordinary work.
+        if (doc.getStatus() == com.labdms.domain.model.document.DocumentStatus.ACTIVE
+                && commit.equals(doc.getOfficialCommitId())) {
             throw new IllegalStateException(
-                    "This version is the one in force and cannot be changed. "
-                    + "Save a new version first, then edit its files.");
+                    "Esta é a versão em vigor e não pode ser alterada diretamente. "
+                    + "Salve uma nova versão e edite os arquivos dela.");
         }
         return commit;
     }

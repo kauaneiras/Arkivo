@@ -337,6 +337,13 @@ public class DocumentController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    // This endpoint had no authorization at all: any authenticated account,
+    // including a read-only Viewer, could create documents by calling it
+    // directly. The button was the only thing standing in the way, and a button
+    // is not access control — anyone who knew the URL was past it.
+    //
+    // Checked here rather than in the screen so the rule holds for every caller.
+    @PreAuthorize("hasAuthority('DOCUMENT_CREATE')")
     @Operation(summary = "Create a new document", description = "Creates a document and initializes the main branch with the first commit")
     public ResponseEntity<DocumentResponse> createDocument(
             @Valid @RequestBody CreateDocumentRequest request,

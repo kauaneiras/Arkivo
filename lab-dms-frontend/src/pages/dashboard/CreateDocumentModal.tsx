@@ -56,7 +56,15 @@ export default function CreateDocumentModal({ isOpen, onClose, onSuccess }: Crea
   const [reviewers, setReviewers] = useState<any[]>([]);
   // ISO/IEC 17025: 8.3.2 b) periodic review, 8.4 retention, 8.3.2 d) distribution
   const [reviewIntervalMonths, setReviewIntervalMonths] = useState(24);
+  // Nem todo documento tem prazo. Um registro histórico ou um anexo de
+  // referência não "vence" — forçar uma data faria o sistema cobrar uma revisão
+  // que ninguém deve fazer, e alertas que se ignoram treinam a equipe a ignorar
+  // todos os alertas.
+  const [noReviewDeadline, setNoReviewDeadline] = useState(false);
   const [retentionYears, setRetentionYears] = useState(5);
+  // Guardar para sempre por omissão. Um prazo curto demais só dá sinal quando o
+  // documento já foi descartado, e nessa altura já não há nada a decidir.
+  const [retainForever, setRetainForever] = useState(true);
   const [requiresAcknowledgement, setRequiresAcknowledgement] = useState(false);
   // Defaults to internal: the safe middle. Public would publish by accident and
   // restricted would lock colleagues out of routine documents.
@@ -70,11 +78,9 @@ export default function CreateDocumentModal({ isOpen, onClose, onSuccess }: Crea
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadKind, setUploadKind] = useState<'tex' | 'zip' | 'pdf' | null>(null);
   const [docTypes, setDocTypes] = useState<DocType[]>([]);
-  // Creating a group needs ADMIN on the server, so the option is only offered
-  // to someone who can actually go through with it.
+  // Admin sees shortcuts to the screens that manage types and sectors; the
+  // management itself lives in Settings, not in this form.
   const [isAdmin, setIsAdmin] = useState(false);
-  const [newGroupName, setNewGroupName] = useState('');
-  const [creatingGroup, setCreatingGroup] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -95,7 +101,6 @@ export default function CreateDocumentModal({ isOpen, onClose, onSuccess }: Crea
       setUploadKind(null);
       setFileName('');
       setFileContent('');
-      setNewGroupName('');
     }
   }, [isOpen]);
 
@@ -197,33 +202,18 @@ export default function CreateDocumentModal({ isOpen, onClose, onSuccess }: Crea
     }
   };
 
-  /**
-   * Creates a group without leaving the form.
-   *
-   * A document's sector is often decided at the moment it is written, and
-   * bouncing to Settings to create one meant losing everything already typed
-   * here.
-   */
-  const handleCreateGroup = async () => {
-    const name = newGroupName.trim();
-    if (!name) return;
-    setCreatingGroup(true);
-    try {
-      const res = await api.post('/documents/groups', { name, description: null });
-      const created = res.data;
-      setGroups((prev) => [...prev, created]);
-      setGroupId(created.id);
-      setNewGroupName('');
-    } catch (err: any) {
-      setError(err.response?.data?.message || t('create.groupError'));
-    } finally {
-      setCreatingGroup(false);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    // Um documento restrito sem setor não restringe nada: ninguém ficaria com
+    // acesso e ele nasceria invisível para toda a gente menos para o autor.
+    // Ou se escolhe quem vê, ou a visibilidade é outra.
+    if (visibility === 'RESTRICTED' && !groupId) {
+      setError(t('create.groupRequired'));
+      return;
+    }
+
     setLoading(true);
 
     // A .zip or .pdf has no LaTeX source to send up front — the document is
@@ -241,8 +231,9 @@ export default function CreateDocumentModal({ isOpen, onClose, onSuccess }: Crea
         docType,
         documentGroupId: groupId || null, // group/sector is optional
         assignedReviewerId: reviewerId || null, // optional: can be decided later
-        reviewIntervalMonths: Number(reviewIntervalMonths) || null,
-        retentionYears: Number(retentionYears) || null,
+        reviewIntervalMonths: noReviewDeadline ? 0 : (Number(reviewIntervalMonths) || null),
+        // 0 = para sempre, a mesma convenção que o prazo de revisão já usa.
+        retentionYears: retainForever ? 0 : (Number(retentionYears) || null),
         requiresAcknowledgement,
         visibility,
         initialLatexSource,
@@ -327,9 +318,14 @@ export default function CreateDocumentModal({ isOpen, onClose, onSuccess }: Crea
               placeholder="IT-001"
               title={t('create.codeHint')}
             />
+            {/* No modo automático não há explicação por baixo: o campo já está
+                preenchido e desativado, o que mostra sozinho o que está a
+                acontecer. A frase que estava aqui repetia o óbvio em cada
+                criação. No modo manual a dica fica, porque aí há um formato a
+                respeitar e o utilizador pode errá-lo. */}
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs text-textMuted">
-                {codeAuto ? t('create.codeAuto') : t('create.codeHint')}
+                {codeAuto ? '' : t('create.codeHint')}
               </p>
               <button
                 type="button"
@@ -381,45 +377,6 @@ export default function CreateDocumentModal({ isOpen, onClose, onSuccess }: Crea
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-textMain">{t('create.group')}</label>
-          <select
-            value={groupId}
-            onChange={(e) => setGroupId(e.target.value)}
-            className="input-field"
-          >
-            <option value="">{t('create.noGroup')}</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>{g.name}</option>
-            ))}
-          </select>
-          {isAdmin && (
-            // Offered only to admins because POST /documents/groups requires the
-            // role; showing it to everyone would produce a 403 after typing.
-            <div className="flex items-center gap-2 pt-1">
-              <input
-                type="text"
-                value={newGroupName}
-                onChange={(e) => setNewGroupName(e.target.value)}
-                onKeyDown={(e) => {
-                  // Enter here must not submit the whole document form.
-                  if (e.key === 'Enter') { e.preventDefault(); handleCreateGroup(); }
-                }}
-                className="input-field text-sm py-1.5"
-                placeholder={t('create.newGroupPlaceholder')}
-              />
-              <button
-                type="button"
-                onClick={handleCreateGroup}
-                disabled={!newGroupName.trim() || creatingGroup}
-                className="btn-outline text-sm py-1.5 px-3 whitespace-nowrap disabled:opacity-50"
-              >
-                {creatingGroup ? t('create.addingGroup') : t('create.addGroup')}
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-1.5">
           <label className="text-sm font-medium text-textMain">{t('create.reviewer')}</label>
           <select
             value={reviewerId}
@@ -444,23 +401,54 @@ export default function CreateDocumentModal({ isOpen, onClose, onSuccess }: Crea
               <input
                 type="number" min={0} max={120} value={reviewIntervalMonths}
                 onChange={(e) => setReviewIntervalMonths(Number(e.target.value))}
-                className="input-field"
+                disabled={noReviewDeadline}
+                className={cn('input-field', noReviewDeadline && 'opacity-40 cursor-not-allowed')}
               />
               <span className="text-sm text-textMuted whitespace-nowrap">{t('create.months')}</span>
             </div>
-            <p className="text-xs text-textMuted">{t('create.reviewIntervalHint')}</p>
+            {/* Desligar o prazo é uma escolha legítima para registros que não
+                vencem. Fica junto do campo, e não escondido, para que quem
+                desliga saiba exatamente o que desligou. */}
+            <label className="flex items-center gap-2 cursor-pointer pt-0.5">
+              <input
+                type="checkbox"
+                checked={noReviewDeadline}
+                onChange={(e) => setNoReviewDeadline(e.target.checked)}
+                className="w-4 h-4 rounded border-borderLight text-primary focus:ring-primary"
+              />
+              <span className="text-xs text-textMain">{t('create.noDeadline')}</span>
+            </label>
+            <p className="text-xs text-textMuted">
+              {noReviewDeadline ? t('create.noDeadlineHint') : t('create.reviewIntervalHint')}
+            </p>
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-textMain">{t('create.retention')}</label>
             <div className="flex items-center gap-2">
               <input
-                type="number" min={0} max={50} value={retentionYears}
+                type="number" min={1} max={50} value={retentionYears}
                 onChange={(e) => setRetentionYears(Number(e.target.value))}
-                className="input-field"
+                disabled={retainForever}
+                className={cn('input-field', retainForever && 'opacity-40 cursor-not-allowed')}
               />
               <span className="text-sm text-textMuted whitespace-nowrap">{t('create.years')}</span>
             </div>
-            <p className="text-xs text-textMuted">{t('create.retentionHint')}</p>
+            {/* Guardar para sempre é o padrão porque é a escolha que não perde
+                nada: um prazo curto demais só se descobre quando o documento já
+                foi descartado, e aí não há como voltar atrás. Encurtar é uma
+                decisão deliberada de quem conhece a exigência legal do ensaio. */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={retainForever}
+                onChange={(e) => setRetainForever(e.target.checked)}
+                className="w-4 h-4 rounded border-borderLight text-primary focus:ring-primary"
+              />
+              <span className="text-xs text-textMain">{t('create.retainForever')}</span>
+            </label>
+            <p className="text-xs text-textMuted">
+              {retainForever ? t('create.retainForeverHint') : t('create.retentionHint')}
+            </p>
           </div>
         </div>
 
@@ -494,8 +482,59 @@ export default function CreateDocumentModal({ isOpen, onClose, onSuccess }: Crea
               {t('privacy.publicWarning')}
             </p>
           )}
+          {/* O setor fica ENCOSTADO à escolha que o faz aparecer.
+              Estava mais de cem linhas acima: carregava-se em "Restrito" no fim
+              do formulário e o campo surgia lá em cima, muitas vezes fora do
+              ecrã. Um campo obrigatório que aparece onde não se está a olhar é
+              um campo que se descobre no momento em que a submissão é recusada.
+              Ele só é perguntado aqui porque só aqui decide alguma coisa: num
+              documento interno ou público, escolher um setor não muda quem vê. */}
           {visibility === 'RESTRICTED' && (
-            <p className="text-xs text-textMuted">{t('privacy.restrictedAfterCreate')}</p>
+            <div className="space-y-1.5 pt-2 pl-3 border-l-2 border-primary/30">
+              <label className="text-sm font-medium text-textMain">
+                {t('create.group')} <span className="text-red-600">*</span>
+              </label>
+              {/* A bolha de validação do navegador é boa — aponta para o campo
+                  certo e trava o envio — mas o texto dela vem do idioma do
+                  NAVEGADOR, não do da aplicação: com o sistema em português dizia
+                  "Please select an item in the list." E dizia pouco. Substituir a
+                  mensagem mantém o comportamento nativo e põe lá a explicação, na
+                  língua certa. A limpeza no onChange é obrigatória: uma validade
+                  personalizada não vazia mantém o campo inválido para sempre,
+                  mesmo depois de escolhido. */}
+              <select
+                value={groupId}
+                onChange={(e) => {
+                  e.currentTarget.setCustomValidity('');
+                  setGroupId(e.target.value);
+                }}
+                onInvalid={(e) => e.currentTarget.setCustomValidity(t('create.groupRequired'))}
+                required
+                className="input-field"
+              >
+                {/* Sem opção "nenhum": o campo só existe quando a escolha é
+                    obrigatória, e oferecer o vazio seria oferecer um estado que a
+                    submissão vai recusar de seguida. */}
+                <option value="">{t('create.groupChoose')}</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+              {groups.length === 0 && (
+                <p className="text-xs text-amber-700">{t('create.groupNoneExist')}</p>
+              )}
+              <p className="text-xs text-textMuted">
+                {t('create.groupRestrictedHint')}{' '}
+                {isAdmin && (
+                  <button type="button"
+                    onClick={() => navigate('/dashboard/settings?tab=groups')}
+                    className="text-primary hover:underline">
+                    {t('create.manageGroups')}
+                  </button>
+                )}
+              </p>
+              <p className="text-xs text-textMuted">{t('privacy.restrictedAfterCreate')}</p>
+            </div>
           )}
         </div>
 

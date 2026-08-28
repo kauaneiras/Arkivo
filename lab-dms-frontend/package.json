@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/verificar-traducoes.mjs && tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify:i18n": "node scripts/verificar-traducoes.mjs"
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.0",

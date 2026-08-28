@@ -118,7 +118,23 @@ public class Document {
         this.updatedAt = Instant.now();
     }
 
-    /** Null interval means the document is not subject to periodic review. */
+    /**
+     * Schedules the first periodic review, counted from creation.
+     *
+     * <p>Without this the review date was only ever set the first time somebody
+     * performed a review — so a brand new document had no date, the reminder job
+     * (which filters on {@code next_review_date IS NOT NULL}) never saw it, and
+     * the periodic review it was configured for silently never came due. The
+     * interval was being collected and then ignored.
+     *
+     * <p>An interval of zero or null means the document is deliberately not
+     * subject to periodic review, and leaves the date null.
+     */
+    public void scheduleFirstReview(Instant from) {
+        this.nextReviewDate = computeNextReviewDate(from);
+    }
+
+    /** Null or zero interval means the document is not subject to periodic review. */
     private java.time.LocalDate computeNextReviewDate(Instant from) {
         if (reviewIntervalMonths == null || reviewIntervalMonths <= 0) return null;
         return from.atZone(java.time.ZoneOffset.UTC).toLocalDate().plusMonths(reviewIntervalMonths);

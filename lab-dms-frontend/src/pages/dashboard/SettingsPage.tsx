@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import api from '../../lib/api';
-import { useI18n, type Lang } from '../../lib/i18n';
+import { useI18n, LANGUAGES } from '../../lib/i18n';
 import { useTheme, type Theme } from '../../lib/theme';
 import { useToast } from '../../components/ui';
-import { Globe, KeyRound, Sun, Moon, Monitor, Palette, Tags, Info } from 'lucide-react';
+import { Globe, KeyRound, Sun, Moon, Monitor, Palette, Tags, Info, Layers } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useSearchParams } from 'react-router-dom';
 import DocumentTypesAdmin from '../../components/DocumentTypesAdmin';
 import BrandingAdmin from '../../components/BrandingAdmin';
 import AboutPanel from '../../components/AboutPanel';
+import GroupsAdmin from '../../components/GroupsAdmin';
 
 /**
  * Settings are split into sections rather than stacked on one page: personal
@@ -17,7 +18,7 @@ import AboutPanel from '../../components/AboutPanel';
  * organisation's logo settings to change your own password made none of them
  * easy to find. New sections slot into the list below without touching layout.
  */
-type Section = 'appearance' | 'security' | 'branding' | 'types' | 'about';
+type Section = 'appearance' | 'security' | 'branding' | 'types' | 'groups' | 'about';
 
 export default function SettingsPage() {
   const { t, lang, setLang } = useI18n();
@@ -72,6 +73,7 @@ export default function SettingsPage() {
     ...(isAdmin ? [
       { id: 'branding' as Section, label: t('settings.sectionBranding'), Icon: Palette },
       { id: 'types' as Section, label: t('settings.sectionTypes'), Icon: Tags },
+      { id: 'groups' as Section, label: t('settings.sectionGroups'), Icon: Layers },
     ] : []),
     { id: 'about', label: t('settings.sectionAbout'), Icon: Info },
   ];
@@ -110,6 +112,7 @@ export default function SettingsPage() {
 
       {active === 'branding' && isAdmin && <BrandingAdmin />}
       {active === 'types' && isAdmin && <DocumentTypesAdmin />}
+      {active === 'groups' && isAdmin && <GroupsAdmin />}
       {active === 'about' && <AboutPanel />}
 
       {/* Language */}
@@ -119,14 +122,16 @@ export default function SettingsPage() {
           <Globe className="w-4 h-4 text-primary" />
           {t('settings.language')}
         </h2>
-        <div className="grid grid-cols-2 gap-3">
-          {([
-            { code: 'pt', label: t('settings.portuguese'), flag: '🇧🇷' },
-            { code: 'en', label: t('settings.english'), flag: '🇺🇸' },
-          ] as { code: Lang; label: string; flag: string }[]).map((option) => (
+        {/* Sem bandeiras, de propósito: uma bandeira é um país e um idioma não
+            é. O espanhol não é da Espanha mais do que do México, e a bandeira
+            do Brasil deixaria de fora quem fala português noutro sítio. O nome
+            escrito na própria língua identifica sem excluir ninguém. */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {LANGUAGES.map((option) => (
             <button
               key={option.code}
               onClick={() => setLang(option.code)}
+              aria-pressed={lang === option.code}
               className={cn(
                 'flex items-center gap-3 p-4 rounded-lg border-2 transition-all text-left',
                 lang === option.code
@@ -134,11 +139,12 @@ export default function SettingsPage() {
                   : 'border-borderLight text-textMuted hover:border-primary/40'
               )}
             >
-              <span className="text-2xl">{option.flag}</span>
+              <span className="text-sm font-semibold w-10 shrink-0">{option.short}</span>
               <span className="text-sm font-medium">{option.label}</span>
             </button>
           ))}
         </div>
+        <p className="text-xs text-textMuted mt-3">{t('settings.languageHint')}</p>
       </div>
 
       {/* Appearance */}

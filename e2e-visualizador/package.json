@@ -1,0 +1,10 @@
+{
+  "name": "lab-dms-e2e-visualizador",
+  "private": true,
+  "type": "module",
+  "description": "Prova, num navegador de verdade, que o painel de PDF renderiza.",
+  "dependencies": {
+    "@sparticuz/chromium": "^133.0.0",
+    "puppeteer-core": "^24.0.0"
+  }
+}

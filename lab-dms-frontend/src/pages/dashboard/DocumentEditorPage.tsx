@@ -5,6 +5,12 @@ import CodeMirror from '@uiw/react-codemirror';
 import { StreamLanguage } from '@codemirror/language';
 import { stex } from '@codemirror/legacy-modes/mode/stex';
 import { Document as PdfDocument, Page, pdfjs } from 'react-pdf';
+// react-pdf ships its own stylesheets and expects them to be imported. We render
+// with the text and annotation layers off, so the pages draw without them — but
+// leaving them out means any future change that turns a layer on produces
+// invisible or misplaced content, which is a confusing way to find out.
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
 import {
   ArrowLeft, Save, Play, CheckCircle, FileText, History,
   GitCommitHorizontal, Diff, Download, Lock, AlertTriangle, RotateCcw,
@@ -72,6 +78,55 @@ export default function DocumentEditorPage() {
   const [content, setContent] = useState('');
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [numPages, setNumPages] = useState<number | null>(null);
+  // True = the paged renderer (default), false = the browser's own PDF viewer.
+  //
+  // Paged is the default because it is the one whose rendering is actually
+  // verified end-to-end: a headless browser loads this page and the pages come
+  // out as painted canvases. It also keeps the preview inside the application's
+  // own chrome. The browser's viewer is a genuinely good escape hatch — it needs
+  // no worker, no module MIME type and no extra assets, so it survives the
+  // environment problems that stop pdf.js — and it is one click away, offered
+  // automatically whenever the paged renderer reports a failure.
+  const [pagedView, setPagedView] = useState<boolean>(() => {
+    try { return localStorage.getItem('labdms.pdfPagedView') !== '0'; } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('labdms.pdfPagedView', pagedView ? '1' : '0'); } catch { /* private mode */ }
+  }, [pagedView]);
+
+  // Why the viewer failed, in the viewer's own words.
+  //
+  // react-pdf renders a fixed "Failed to load PDF file." and swallows the
+  // reason. Every cause looks identical on screen — a worker that did not
+  // start, a response that was not really a PDF, a revoked blob — so there is
+  // nothing to act on. Holding the message here puts the actual cause in front
+  // of whoever has to fix it.
+  const [viewerError, setViewerError] = useState<string | null>(null);
+
+  // What actually renders. A failure demotes the paged view for as long as the
+  // failure stands, without rewriting what the reader chose. Declared after
+  // viewerError because it reads it.
+  const showPaged = pagedView && !viewerError;
+
+  // The page is rendered at the width of the panel, not at a fixed size.
+  //
+  // A hard-coded width larger than the panel clips the right-hand margin of
+  // every page, and on a laptop screen with the file tree open that is most of
+  // the time. Measuring means the preview also follows the panel when the window
+  // is resized instead of only being right at one size.
+  const previewRef = useRef<HTMLDivElement>(null);
+  const [previewWidth, setPreviewWidth] = useState(560);
+  useEffect(() => {
+    const el = previewRef.current;
+    if (!el) return;
+    const measure = () => setPreviewWidth(el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [showPaged, pdfBlobUrl]);
+  // Minus the container padding, and never so narrow that the page is unreadable.
+  const pageWidth = Math.max(280, previewWidth - 48);
   const [isCompiling, setIsCompiling] = useState(false);
   const [compileError, setCompileError] = useState<string | null>(null);
   // The errors live in a badge that opens on demand, so a long pdflatex log
@@ -150,6 +205,14 @@ export default function DocumentEditorPage() {
     if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
     blobUrlRef.current = url;
     setPdfBlobUrl(url);
+    // Both belong to the PDF being replaced, so both die with it.
+    //
+    // numPages especially: keeping the previous count makes React ask the NEW
+    // document for pages it may not have — page 3 of a document that now has
+    // one. That fails inside the renderer and produces a blank area with no
+    // message, which is indistinguishable from "the preview is broken".
+    setNumPages(null);
+    setViewerError(null);
   }, []);
 
   const fetchDocument = useCallback(async () => {
@@ -1246,6 +1309,24 @@ export default function DocumentEditorPage() {
 
               {pdfBlobUrl && (
                 <button
+                  onClick={() => {
+                    // Asking for the paged view again is also asking to retry it:
+                    // the previous failure may have been the compile before this
+                    // one, and refusing to try would strand the reader on the
+                    // fallback forever.
+                    if (!showPaged) setViewerError(null);
+                    setPagedView(!showPaged);
+                  }}
+                  className="flex items-center gap-1 text-textMuted hover:text-primary normal-case"
+                  title={t('editor.viewerToggleHint')}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  {showPaged ? t('editor.viewerNative') : t('editor.viewerPaged')}
+                </button>
+              )}
+
+              {pdfBlobUrl && (
+                <button
                   onClick={handleDownloadPdf}
                   className="flex items-center gap-1 text-primary hover:underline normal-case"
                 >
@@ -1302,24 +1383,87 @@ export default function DocumentEditorPage() {
             </div>
           )}
 
-          <div className="flex-1 overflow-auto p-6 flex flex-col items-center gap-4">
-            {pdfBlobUrl ? (
-              <PdfDocument
-                file={pdfBlobUrl}
-                onLoadSuccess={({ numPages }) => setNumPages(numPages)}
-                loading={<div className="p-12 text-textMuted">{t('common.loading')}</div>}
-              >
-                {Array.from({ length: numPages ?? 0 }).map((_, i) => (
-                  <div key={i} className="bg-white shadow-lg border border-gray-200 mb-4">
-                    <Page pageNumber={i + 1} renderTextLayer={false} renderAnnotationLayer={false} width={560} />
-                  </div>
-                ))}
-              </PdfDocument>
-            ) : (
+          {/* The PDF panel.
+
+              The browser's own viewer is the default, not a fallback. It needs no
+              worker, no module MIME type and no extra assets to fetch — so it is
+              immune to the whole class of environment problems that repeatedly
+              left this panel blank, and it brings zoom, search, print and page
+              navigation for free. The paged renderer stays available behind the
+              toggle for anyone who prefers the continuous-page look; if it ever
+              fails, it says why and the reader can switch back in one click
+              instead of being stuck looking at nothing. */}
+          {/* A failure in the paged renderer switches to the browser's viewer by
+              itself. Leaving a button for the reader to press would mean the
+              document stays unreadable until someone notices the button — the
+              fallback exists precisely for the case where nothing is showing, so
+              it has to be automatic. The stored preference is deliberately NOT
+              changed: this is a recovery, not a decision the reader made. */}
+          <div
+            ref={previewRef}
+            className={cn(
+              'flex-1 overflow-auto flex flex-col',
+              // A grey backdrop is what makes each page read as a sheet of
+              // paper. On white, a white page has no edge and the preview looks
+              // like text floating in the panel.
+              showPaged ? 'items-center gap-4 p-6 bg-gray-100 dark:bg-neutral-900' : 'p-0',
+            )}
+          >
+            {!pdfBlobUrl ? (
               <div className="flex flex-col items-center justify-center text-textMuted h-full opacity-50">
                 <FileText className="w-16 h-16 mb-4" />
                 <p>{t('editor.compileHint')}</p>
               </div>
+            ) : !showPaged ? (
+              <>
+                {viewerError && (
+                  <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2">
+                    <p className="text-[11px] text-amber-900">{t('editor.viewerFellBack')}</p>
+                    <p className="text-[11px] font-mono text-amber-800 mt-1 break-words">{viewerError}</p>
+                  </div>
+                )}
+                <object
+                  data={pdfBlobUrl}
+                  type="application/pdf"
+                  className="flex-1 w-full min-h-0"
+                  aria-label={t('editor.pdfPreview')}
+                >
+                  {/* Reached only when the browser has no PDF viewer at all. */}
+                  <div className="p-8 text-center text-textMuted">
+                    <p>{t('editor.viewerNoNative')}</p>
+                    <button onClick={handleDownloadPdf} className="text-primary hover:underline mt-2">
+                      {t('editor.downloadPdf')}
+                    </button>
+                  </div>
+                </object>
+              </>
+            ) : (
+              <>
+                <PdfDocument
+                  file={pdfBlobUrl}
+                  onLoadSuccess={({ numPages }) => { setNumPages(numPages); setViewerError(null); }}
+                  // Two different failures worth telling apart: onSourceError is
+                  // the blob never arriving, onLoadError is pdf.js refusing what
+                  // arrived. Either way the reason reaches the screen — leaving
+                  // them silent is what made every cause look identical.
+                  onLoadError={(e: Error) => setViewerError(e?.message || String(e))}
+                  onSourceError={(e: Error) => setViewerError(e?.message || String(e))}
+                  loading={<div className="p-12 text-textMuted">{t('common.loading')}</div>}
+                  error={<div className="p-12 text-textMuted">{t('editor.viewerFellBack')}</div>}
+                >
+                  {Array.from({ length: numPages ?? 0 }).map((_, i) => (
+                    <div key={i} className="bg-white shadow-lg border border-gray-200 mb-4">
+                      <Page
+                        pageNumber={i + 1}
+                        renderTextLayer={false}
+                        renderAnnotationLayer={false}
+                        width={pageWidth}
+                        onRenderError={(e: Error) => setViewerError(e?.message || String(e))}
+                      />
+                    </div>
+                  ))}
+                </PdfDocument>
+              </>
             )}
           </div>
         </div>

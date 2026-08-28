@@ -4,6 +4,7 @@ import GroupMembersModal from '../../components/GroupMembersModal';
 import { Check, Clock, UserCheck, Search, UserPlus, Layers, Plus, Pencil, Trash2, Users } from 'lucide-react';
 import { useI18n } from '../../lib/i18n';
 import { EmptyState, TableSkeleton, Modal, ConfirmModal, useToast } from '../../components/ui';
+import { useAuthStore } from '../../store/authStore';
 import { cn } from '../../lib/utils';
 
 interface UserDto {
@@ -45,6 +46,10 @@ export default function UsersPage() {
   const [groupForm, setGroupForm] = useState({ name: '', description: '' });
   const [savingGroup, setSavingGroup] = useState(false);
   const [groupToDelete, setGroupToDelete] = useState<GroupDto | null>(null);
+  const [userToDelete, setUserToDelete] = useState<UserDto | null>(null);
+  // A própria conta nunca mostra estes botões: o servidor recusaria de qualquer
+  // forma, e oferecer o gesto para depois o negar é pior do que não o oferecer.
+  const currentUserId = useAuthStore((s) => s.user?.id);
   // Which sector's membership is open. Membership decides who can read the
   // documents shared with the group, so it sits next to the group itself.
   const [membersOf, setMembersOf] = useState<GroupDto | null>(null);
@@ -58,18 +63,54 @@ export default function UsersPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [pendingRes, activeRes, rolesRes] = await Promise.all([
+      // As desativadas vêm na mesma lista, de propósito. Uma conta desativada
+      // que desaparece do ecrã parece apagada, e ninguém encontra como a repor;
+      // aqui ela fica visível, marcada, e a um clique de voltar.
+      const [pendingRes, activeRes, inactiveRes, rolesRes] = await Promise.all([
         api.get('/users?status=PENDING'),
         api.get('/users?status=ACTIVE'),
+        api.get('/users?status=INACTIVE'),
         api.get('/users/roles'),
       ]);
       setPendingUsers(pendingRes.data);
-      setActiveUsers(activeRes.data);
+      setActiveUsers([...activeRes.data, ...inactiveRes.data]);
       setRoles(rolesRes.data);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * Desativa ou reativa. O servidor é quem decide se pode.
+   *
+   * As recusas que interessam — a própria conta, o último administrador — vivem
+   * lá, porque uma verificação feita só aqui protegeria apenas quem usa o ecrã.
+   * A mensagem que ele devolve já explica o motivo, então é essa que se mostra.
+   */
+  const handleSetStatus = async (user: UserDto, status: 'ACTIVE' | 'INACTIVE') => {
+    try {
+      const res = await api.put(`/users/${user.id}/status`, { status });
+      toast('success', res.data?.message ?? '');
+      fetchData();
+    } catch (err: any) {
+      toast('error', err.response?.data?.message ?? t('users.statusFailed'));
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    try {
+      const res = await api.delete(`/users/${userToDelete.id}`);
+      toast('success', res.data?.message ?? '');
+      setUserToDelete(null);
+      fetchData();
+    } catch (err: any) {
+      // Recusa esperada: a conta tem histórico. A resposta diz quantos registos
+      // e o que fazer em vez disso, e é bem mais útil que "erro ao apagar".
+      toast('error', err.response?.data?.message ?? t('users.deleteFailed'));
+      setUserToDelete(null);
     }
   };
 
@@ -313,21 +354,32 @@ export default function UsersPage() {
                       {t('users.rolesHint')}
                     </span>
                   </th>
+                  <th className="px-6 py-4 text-right">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-borderLight">
                 {loading ? (
-                  <TableSkeleton cols={4} />
+                  <TableSkeleton cols={5} />
                 ) : filteredActive.length === 0 ? (
-                  <tr><td colSpan={4}><EmptyState message={t('users.noActive')} /></td></tr>
+                  <tr><td colSpan={5}><EmptyState message={t('users.noActive')} /></td></tr>
                 ) : (
                   filteredActive.map((user) => (
-                    <tr key={user.id} className="hover:bg-surface/50 transition-colors">
+                    <tr key={user.id} className={cn(
+                      'hover:bg-surface/50 transition-colors',
+                      // Uma conta desativada continua na lista, mas apagada, para
+                      // se distinguir de relance sem ser preciso ler o estado.
+                      user.status === 'INACTIVE' && 'opacity-60',
+                    )}>
                       <td className="px-6 py-4 font-medium text-textMain">{user.fullName}</td>
                       <td className="px-6 py-4 text-textMuted">{user.email}</td>
                       <td className="px-6 py-4">
-                        <span className="px-2.5 py-1 rounded-full text-xs font-medium border bg-green-50 text-green-700 border-green-200">
-                          {user.status}
+                        <span className={cn(
+                          'px-2.5 py-1 rounded-full text-xs font-medium border',
+                          user.status === 'INACTIVE'
+                            ? 'bg-gray-100 text-gray-600 border-gray-300'
+                            : 'bg-green-50 text-green-700 border-green-200',
+                        )}>
+                          {user.status === 'INACTIVE' ? t('users.inactive') : t('users.active')}
                         </span>
                       </td>
                       <td className="px-6 py-4">
@@ -352,6 +404,33 @@ export default function UsersPage() {
                             );
                           })}
                         </div>
+                      </td>
+                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                        {user.id === currentUserId ? (
+                          <span className="text-xs text-textMuted">{t('users.itsYou')}</span>
+                        ) : (
+                          <div className="flex items-center justify-end gap-3">
+                            <button
+                              onClick={() => handleSetStatus(
+                                user, user.status === 'INACTIVE' ? 'ACTIVE' : 'INACTIVE')}
+                              className="text-xs text-primary hover:underline"
+                            >
+                              {user.status === 'INACTIVE' ? t('users.reactivate') : t('users.deactivate')}
+                            </button>
+                            {/* Apagar fica à distância de uma confirmação e só é
+                                aceite pelo servidor para contas sem histórico.
+                                O botão aparece na mesma: a recusa explica porquê
+                                e ensina que o caminho normal é desativar. */}
+                            <button
+                              onClick={() => setUserToDelete(user)}
+                              className="text-textMuted hover:text-red-600 transition-colors"
+                              title={t('users.delete')}
+                              aria-label={t('users.delete')}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -552,6 +631,16 @@ export default function UsersPage() {
         onConfirm={handleDeleteGroup}
         title={t('groups.deleteConfirmTitle')}
         body={t('groups.deleteConfirmBody').replace('{name}', groupToDelete?.name ?? '')}
+        confirmLabel={t('common.delete')}
+        danger
+      />
+
+      <ConfirmModal
+        isOpen={!!userToDelete}
+        onClose={() => setUserToDelete(null)}
+        onConfirm={handleDeleteUser}
+        title={t('users.deleteConfirmTitle')}
+        body={t('users.deleteConfirmBody').replace('{name}', userToDelete?.fullName ?? '')}
         confirmLabel={t('common.delete')}
         danger
       />

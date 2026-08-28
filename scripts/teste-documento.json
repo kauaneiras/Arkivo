@@ -1,0 +1,6 @@
+{
+  "title": "Teste automatico do visualizador",
+  "docType": "PO",
+  "visibility": "PRIVATE",
+  "initialLatexSource": "\\documentclass[12pt,a4paper]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage[T1]{fontenc}\n\\usepackage[brazil]{babel}\n\\title{Teste automatico do visualizador}\n\\begin{document}\n\\maketitle\n\\section{Objetivo}\nEste documento e compilado pelo RODAR-TESTE para provar que o visualizador de LaTeX funciona de ponta a ponta: criacao, compilacao e entrega do PDF.\n\\section{Acentuacao}\nAvaliacao, calibracao, tecnica, laboratorio, medicao.\n\\end{document}\n"
+}

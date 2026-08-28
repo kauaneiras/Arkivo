@@ -1,0 +1,3 @@
+{
+  "latexSource": "\\documentclass[12pt,a4paper]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage[T1]{fontenc}\n\\usepackage[brazil]{babel}\n\\begin{document}\n\\section{Pre-visualizacao ao vivo}\nEste e o caminho que o editor usa para um documento de ficheiro unico: compila o que esta no ecra, sem gravar.\n\\end{document}\n"
+}

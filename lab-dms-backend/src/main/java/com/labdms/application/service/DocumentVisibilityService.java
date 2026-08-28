@@ -108,12 +108,22 @@ public class DocumentVisibilityService {
         return n != null && n > 0;
     }
 
+    /**
+     * The permissions table keys on {@code code}, not {@code name}.
+     *
+     * <p>This said {@code p.name}, which does not exist — so the query did not
+     * return false, it threw a SQL grammar error. Because this is on the read
+     * path of every document, opening or reviewing a document created by
+     * somebody else failed with a 500: the author short-circuits above and never
+     * reaches here, which is why it worked on your own documents and only broke
+     * on other people's.
+     */
     private boolean hasPermission(UUID userId, String permission) {
         Integer n = jdbcTemplate.queryForObject("""
                 SELECT COUNT(*) FROM user_roles ur
                   JOIN role_permissions rp ON rp.role_id = ur.role_id
                   JOIN permissions p ON p.id = rp.permission_id
-                 WHERE ur.user_id = ? AND p.name = ?
+                 WHERE ur.user_id = ? AND p.code = ?
                 """, Integer.class, userId, permission);
         return n != null && n > 0;
     }

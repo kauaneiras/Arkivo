@@ -54,6 +54,28 @@ public class AuthController {
         return ResponseEntity.ok(new JwtAuthenticationResponse(jwt, userInfo));
     }
 
+    /**
+     * Quem está autenticado, agora — não quem estava quando entrou.
+     *
+     * <p>As permissões viajam na resposta do login e ficam guardadas no
+     * navegador. Sem esta rota, uma permissão nova só chegaria a quem voltasse a
+     * autenticar-se: toda a gente com sessão aberta veria o sistema recusar
+     * ações que na verdade já pode fazer, ou oferecer ações que já não pode. O
+     * ecrã lê isto ao carregar e passa a refletir o estado real.
+     */
+    @GetMapping("/me")
+    @Operation(summary = "Current identity, roles and permissions")
+    public ResponseEntity<UserInfoDto> me(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal
+                    com.labdms.infrastructure.security.UserPrincipal principal) {
+        if (principal == null) return ResponseEntity.status(401).build();
+        java.util.List<String> authorities = principal.getAuthorities().stream()
+                .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                .collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(new UserInfoDto(principal.getId(), principal.getUsername(),
+                principal.getEmail(), principal.getFullName(), authorities));
+    }
+
     @PostMapping("/register")
     @Operation(summary = "Register a new user (request access)")
     public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequest registerRequest) {
