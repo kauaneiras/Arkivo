@@ -23,10 +23,31 @@ public class CommitRepositoryAdapter implements CommitRepository {
         this.mapper = mapper;
     }
 
+    /**
+     * Grava E descarrega para a base, na hora.
+     *
+     * <p>{@code save} sozinho apenas põe a entidade no contexto de persistência:
+     * o INSERT só sai quando o Hibernate decide descarregar, normalmente no fim
+     * da transação. Só que a árvore de ficheiros de uma nova versão é copiada
+     * logo a seguir por SQL direto — {@code INSERT INTO project_files ... SELECT}
+     * — e o SQL direto não passa pelo Hibernate nem o obriga a descarregar. A
+     * linha do commit ainda não existia quando as linhas dos ficheiros
+     * tentavam apontar para ela, e a base recusava:
+     *
+     * <pre>project_files_commit_id_fkey: chave (commit_id) não presente em commits</pre>
+     *
+     * <p>Não se via em documentos de ficheiro único porque aí não há árvore para
+     * copiar: a cópia só corre quando a versão anterior tem ficheiros, ou seja,
+     * exatamente nos projetos importados do Overleaf.
+     *
+     * <p>O flush fica aqui, e não em cada chamador, porque a razão é uma
+     * propriedade deste agregado: um commit é referenciado por SQL direto dentro
+     * da mesma transação. Quem grava um commit não tem de saber disso.
+     */
     @Override
     public Commit save(Commit commit) {
         CommitJpaEntity entity = mapper.toJpaEntity(commit);
-        CommitJpaEntity saved = repository.save(entity);
+        CommitJpaEntity saved = repository.saveAndFlush(entity);
         return mapper.toDomain(saved);
     }
 

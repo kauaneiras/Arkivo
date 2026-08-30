@@ -55,7 +55,7 @@ class AccessControlServiceTest {
                 UserStatus.PENDING, Instant.now(), Instant.now(), null);
         when(userRepository.findById(userId)).thenReturn(Optional.of(inactive));
 
-        assertThatThrownBy(() -> accessControlService.assertCanEdit(userId, groupId))
+        assertThatThrownBy(() -> accessControlService.assertCanEditInSector(userId, groupId))
                 .isInstanceOf(UnauthorizedAccessException.class);
     }
 
@@ -64,7 +64,7 @@ class AccessControlServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser()));
         when(userRepository.findUserPermissions(userId)).thenReturn(List.of("DOCUMENT_VIEW_ALL"));
 
-        assertThatThrownBy(() -> accessControlService.assertCanEdit(userId, groupId))
+        assertThatThrownBy(() -> accessControlService.assertCanEditInSector(userId, groupId))
                 .isInstanceOf(UnauthorizedAccessException.class);
     }
 
@@ -74,7 +74,7 @@ class AccessControlServiceTest {
         when(userRepository.findUserPermissions(userId)).thenReturn(List.of("DOCUMENT_EDIT"));
         when(userRepository.hasGroupAccess(userId, groupId)).thenReturn(false);
 
-        assertThatThrownBy(() -> accessControlService.assertCanEdit(userId, groupId))
+        assertThatThrownBy(() -> accessControlService.assertCanEditInSector(userId, groupId))
                 .isInstanceOf(UnauthorizedAccessException.class);
     }
 
@@ -84,7 +84,7 @@ class AccessControlServiceTest {
         when(userRepository.findUserPermissions(userId)).thenReturn(List.of("DOCUMENT_EDIT"));
         when(userRepository.hasGroupAccess(userId, groupId)).thenReturn(true);
 
-        assertThatCode(() -> accessControlService.assertCanEdit(userId, groupId)).doesNotThrowAnyException();
+        assertThatCode(() -> accessControlService.assertCanEditInSector(userId, groupId)).doesNotThrowAnyException();
     }
 
     @Test
@@ -92,7 +92,7 @@ class AccessControlServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser()));
         when(userRepository.findUserPermissions(userId)).thenReturn(List.of("DOCUMENT_EDIT_ALL"));
 
-        assertThatCode(() -> accessControlService.assertCanEdit(userId, groupId)).doesNotThrowAnyException();
+        assertThatCode(() -> accessControlService.assertCanEditInSector(userId, groupId)).doesNotThrowAnyException();
     }
 
     @Test
@@ -277,6 +277,53 @@ class AccessControlServiceTest {
 
         assertThatCode(() -> accessControlService.assertCanApprove(userId, documentId))
                 .doesNotThrowAnyException();
+    }
+
+    /**
+     * O autor grava no que escreveu, esteja ou não no setor.
+     *
+     * <p>O setor tornou-se obrigatório para documentos restritos, e um setor
+     * criado depois da instalação nasce sem membros. As duas coisas juntas
+     * impediam quem criava um documento de gravar uma versão do próprio
+     * rascunho — o sistema respondia "você não tem permissão para editar este
+     * documento" a quem o tinha acabado de escrever.
+     */
+    @Test
+    void theAuthorEditsTheirOwnDocumentOutsideTheSector() {
+        Document document = documentBy(userId);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser()));
+        when(userRepository.findUserPermissions(userId)).thenReturn(List.of("DOCUMENT_EDIT"));
+
+        assertThatCode(() -> accessControlService.assertCanEdit(userId, document))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void aStrangerToTheSectorIsToldItIsTheSectorAndNotThePermission() {
+        Document document = documentBy(UUID.randomUUID());
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser()));
+        when(userRepository.findUserPermissions(userId)).thenReturn(List.of("DOCUMENT_EDIT"));
+        when(userRepository.hasGroupAccess(userId, groupId)).thenReturn(false);
+
+        assertThatThrownBy(() -> accessControlService.assertCanEdit(userId, document))
+                .isInstanceOf(UnauthorizedAccessException.class)
+                .satisfies(e -> assertThat(((UnauthorizedAccessException) e).getArgs())
+                        .containsExactly("edit_not_in_sector"));
+    }
+
+    @Test
+    void withoutTheEditPermissionTheReasonIsThePermission() {
+        Document document = documentBy(UUID.randomUUID());
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser()));
+        when(userRepository.findUserPermissions(userId)).thenReturn(List.of("DOCUMENT_VIEW_ALL"));
+
+        assertThatThrownBy(() -> accessControlService.assertCanEdit(userId, document))
+                .isInstanceOf(UnauthorizedAccessException.class)
+                .satisfies(e -> assertThat(((UnauthorizedAccessException) e).getArgs())
+                        .containsExactly("edit"));
     }
 
     @Test

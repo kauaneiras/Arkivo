@@ -53,7 +53,17 @@ public class AccessControlService {
     /**
      * Asserts that the user can edit documents in a given group.
      */
-    public void assertCanEdit(UUID userId, UUID documentGroupId) {
+    /**
+     * Pode escrever em documentos DESTE setor — usada quando ainda não há
+     * documento, na criação.
+     *
+     * <p>Nome distinto e não uma sobrecarga de {@code assertCanEdit}: as duas
+     * recebiam dois argumentos de tipo referência, e um documento sem setor
+     * passa {@code null} legitimamente — que casa com ambas e não compila. Uma
+     * sobrecarga que se torna ambígua no argumento mais comum é um erro à espera
+     * de acontecer; os dois nomes também dizem melhor o que cada uma pergunta.
+     */
+    public void assertCanEditInSector(UUID userId, UUID documentGroupId) {
         assertUserActive(userId);
         List<String> permissions = userRepository.findUserPermissions(userId);
         if (!permissions.contains("DOCUMENT_EDIT") && !permissions.contains("DOCUMENT_EDIT_ALL")) {
@@ -61,7 +71,42 @@ public class AccessControlService {
         }
         if (!permissions.contains("DOCUMENT_EDIT_ALL")
                 && !userRepository.hasGroupAccess(userId, documentGroupId)) {
+            logger.warn("Edit refused for user {}: not a member of sector {}", userId, documentGroupId);
+            throw new UnauthorizedAccessException("edit_not_in_sector");
+        }
+    }
+
+    /**
+     * Pode escrever NESTE documento — a versão a usar quando o documento existe.
+     *
+     * <p>A diferença face à variante que recebe apenas o setor é o autor. Um
+     * documento passou a ter setor obrigatório quando é restrito, e um setor
+     * criado depois da instalação nasce sem membros; juntando as duas coisas,
+     * quem criava um documento ficava impedido de gravar uma versão do seu
+     * próprio rascunho. O sistema respondia "você não tem permissão para editar
+     * este documento" a quem o tinha acabado de escrever.
+     *
+     * <p>Quem escreveu tem sempre acesso ao que escreveu. Isso não abre nada:
+     * o autor já podia criar o documento e já vê o seu conteúdo — recusar-lhe a
+     * gravação não protegia ninguém, apenas tornava o documento impossível de
+     * terminar.
+     */
+    public void assertCanEdit(UUID userId, Document document) {
+        assertUserActive(userId);
+        List<String> permissions = userRepository.findUserPermissions(userId);
+
+        if (!permissions.contains("DOCUMENT_EDIT") && !permissions.contains("DOCUMENT_EDIT_ALL")) {
+            logger.warn("Edit refused for user {} on document {}: no DOCUMENT_EDIT. Held: {}",
+                    userId, document.getId(), permissions);
             throw new UnauthorizedAccessException("edit");
+        }
+        if (permissions.contains("DOCUMENT_EDIT_ALL")) return;
+        if (userId.equals(document.getCreatedBy())) return;
+
+        if (!userRepository.hasGroupAccess(userId, document.getDocumentGroupId())) {
+            logger.warn("Edit refused for user {} on document {}: not a member of sector {}",
+                    userId, document.getId(), document.getDocumentGroupId());
+            throw new UnauthorizedAccessException("edit_not_in_sector");
         }
     }
 

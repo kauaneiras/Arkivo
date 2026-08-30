@@ -79,7 +79,7 @@ class DocumentServiceTest {
 
         assertThat(created.getCode().value()).isEqualTo("PQ-001");
         assertThat(created.getStatus()).isEqualTo(DocumentStatus.DRAFT);
-        verify(accessControlService).assertCanEdit(userId, null);
+        verify(accessControlService).assertCanEditInSector(userId, null);
         verify(auditLogPort).log(any());
     }
 

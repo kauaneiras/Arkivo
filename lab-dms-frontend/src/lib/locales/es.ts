@@ -446,6 +446,8 @@ const es: Record<string, string> = {
   'users.deleteConfirmTitle': '¿Eliminar la cuenta?',
   'users.deleteConfirmBody': 'Eliminar «{name}» definitivamente. Solo es posible si la cuenta nunca ha creado documentos ni ha generado registros — en caso contrario, desactívela para preservar el historial.',
   'settings.languageHint': 'Queda guardado en su cuenta y le acompaña en cualquier ordenador.',
+  'editor.autoCommitMessage': 'Versión guardada al enviar: {title}',
+  'editor.autoCommitDone': 'Sus cambios se guardaron como una nueva versión antes de enviar.',
   'editor.previewStale': 'Esta vista previa es de la última compilación que funcionó. Corrija los problemas y compile de nuevo.',
   'editor.pdfPreview': 'Vista previa del PDF',
   'editor.viewerFellBack': 'La vista por páginas no se ha abierto. El documento está correcto — el motivo de abajo viene del visor.',

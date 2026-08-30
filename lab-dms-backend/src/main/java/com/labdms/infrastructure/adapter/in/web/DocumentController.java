@@ -543,7 +543,14 @@ public class DocumentController {
     public ResponseEntity<DocumentResponse> getDocument(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
-        
+
+        // Recebia o utilizador e não fazia nada com ele: qualquer conta
+        // autenticada obtinha os dados de qualquer documento pelo identificador,
+        // incluindo os restritos que a listagem lhe escondia. Esconder na lista
+        // e servir no acesso direto não é uma restrição, é uma sugestão.
+        if (!visibilityService.canRead(principal == null ? null : principal.getId(), id)) {
+            throw new com.labdms.domain.exception.UnauthorizedAccessException("view");
+        }
         DocumentResponse response = DocumentResponse.from(searchDocumentsUseCase.findById(id));
         return ResponseEntity.ok(response);
     }

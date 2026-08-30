@@ -92,7 +92,7 @@ public class VersioningService implements CommitDocumentUseCase, CreateBranchUse
         Document document = documentRepository.findById(command.documentId())
                 .orElseThrow(() -> new DocumentNotFoundException(command.documentId()));
 
-        accessControlService.assertCanEdit(command.userId(), document.getDocumentGroupId());
+        accessControlService.assertCanEdit(command.userId(), document);
 
         Branch branch = branchRepository.findById(command.branchId())
                 .orElseThrow(() -> new BranchNotFoundException(command.branchId()));
@@ -172,7 +172,7 @@ public class VersioningService implements CommitDocumentUseCase, CreateBranchUse
         Document document = documentRepository.findById(command.documentId())
                 .orElseThrow(() -> new DocumentNotFoundException(command.documentId()));
 
-        accessControlService.assertCanEdit(command.userId(), document.getDocumentGroupId());
+        accessControlService.assertCanEdit(command.userId(), document);
 
         // Check for duplicate branch name
         if (branchRepository.existsByDocumentIdAndName(command.documentId(), command.branchName())) {
@@ -212,7 +212,7 @@ public class VersioningService implements CommitDocumentUseCase, CreateBranchUse
         Document document = documentRepository.findById(command.documentId())
                 .orElseThrow(() -> new DocumentNotFoundException(command.documentId()));
 
-        accessControlService.assertCanEdit(command.userId(), document.getDocumentGroupId());
+        accessControlService.assertCanEdit(command.userId(), document);
 
         Branch sourceBranch = branchRepository.findById(command.branchId())
                 .orElseThrow(() -> new BranchNotFoundException(command.branchId()));

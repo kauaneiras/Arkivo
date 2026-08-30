@@ -103,7 +103,7 @@ public class AttachmentController {
                                                  @RequestParam(required = false) String description,
                                                  @AuthenticationPrincipal UserPrincipal principal) {
         Document document = documentService.findById(documentId);
-        accessControlService.assertCanEdit(principal.getId(), document.getDocumentGroupId());
+        accessControlService.assertCanEdit(principal.getId(), document);
 
         if (file.isEmpty()) {
             throw new IllegalArgumentException("Empty file");
@@ -169,7 +169,7 @@ public class AttachmentController {
     public ResponseEntity<Void> delete(@PathVariable UUID documentId, @PathVariable UUID attachmentId,
                                         @AuthenticationPrincipal UserPrincipal principal) {
         Document document = documentService.findById(documentId);
-        accessControlService.assertCanEdit(principal.getId(), document.getDocumentGroupId());
+        accessControlService.assertCanEdit(principal.getId(), document);
 
         Map<String, Object> row = jdbcTemplate.queryForMap(
                 "SELECT file_name, storage_path FROM document_attachments WHERE id = ? AND document_id = ?",

@@ -446,6 +446,8 @@ const fr: Record<string, string> = {
   'users.deleteConfirmTitle': 'Supprimer le compte ?',
   'users.deleteConfirmBody': "Supprimer « {name} » définitivement. Ce n'est possible que si le compte n'a jamais créé de document ni produit d'enregistrement — sinon, désactivez-le pour préserver l'historique.",
   'settings.languageHint': 'Enregistré dans votre compte et vous suit sur tout ordinateur.',
+  'editor.autoCommitMessage': 'Version enregistrée à la soumission : {title}',
+  'editor.autoCommitDone': "Vos modifications ont été enregistrées comme nouvelle version avant l'envoi.",
   'editor.previewStale': 'Cet aperçu provient de la dernière compilation réussie. Corrigez les problèmes et compilez à nouveau.',
   'editor.pdfPreview': 'Aperçu du PDF',
   'editor.viewerFellBack': "L'affichage par pages ne s'est pas ouvert. Le document est correct — le motif ci-dessous vient de la visionneuse.",

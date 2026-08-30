@@ -450,6 +450,8 @@ const pt: Record<string, string> = {
   'users.deleteConfirmTitle': 'Apagar a conta?',
   'users.deleteConfirmBody': 'Apagar «{name}» de vez. Só é possível se a conta nunca tiver criado documentos nem gerado registros — caso contrário, desative-a para preservar o histórico.',
   'settings.languageHint': 'Fica guardado na sua conta e acompanha você em qualquer computador.',
+  'editor.autoCommitMessage': 'Versão gravada ao submeter: {title}',
+  'editor.autoCommitDone': 'Suas alterações foram gravadas como uma nova versão antes de enviar.',
   'editor.previewStale': 'Esta pré-visualização é da última compilação que funcionou. Corrija os problemas e compile de novo.',
   'editor.pdfPreview': 'Pré-visualização do PDF',
   'editor.viewerFellBack': 'A visualização por páginas não abriu. O documento está correto — o motivo abaixo é do visualizador.',

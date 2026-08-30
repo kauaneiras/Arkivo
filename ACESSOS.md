@@ -1,132 +1,190 @@
-# 🔑 Usuários de teste — Lab DMS
+# Quem pode o quê
 
-Todos os usuários abaixo são criados automaticamente na primeira execução.
-
-> **Senha de todos:** `123456`
-
-| E-mail | Senha | Papel | O que consegue fazer |
-|--------|-------|-------|----------------------|
-| `admin@email.com` | `123456` | **Administrador** | Tudo: gerenciar usuários e papéis, criar/editar/aprovar documentos, obsoletar, ver auditoria |
-| `writer@email.com` | `123456` | **Editor** | Criar e editar documentos, salvar versões, compilar, submeter para aprovação |
-| `reviewer@email.com` | `123456` | **Revisor** | Ver tudo, editar, **aprovar ou rejeitar** revisões, ver trilha de auditoria |
-| `reader@email.com` | `123456` | **Leitor** | Somente leitura — não cria nem edita documentos |
-
-Acesso: **http://localhost:3000**
+Auditoria completa da autorização, endpoint a endpoint. Escrita depois de três
+defeitos do mesmo tipo — a mesma recusa a dizer coisas diferentes, e controlos
+que existiam sem proteger nada.
 
 ---
 
-## Como testar o fluxo completo
+## Os papéis e o que carregam
 
-### 1. Criar e compilar um documento (`writer@email.com`)
+| Papel | Permissões |
+|---|---|
+| **ROLE_ADMIN** | todas |
+| **ROLE_EDITOR** | `DOCUMENT_CREATE`, `DOCUMENT_EDIT` |
+| **ROLE_REVIEWER** | `DOCUMENT_VIEW_ALL`, `DOCUMENT_EDIT`, `REVIEW_APPROVE` |
+| **ROLE_VIEWER** | `DOCUMENT_VIEW_ALL` |
 
-1. Entre com `writer@email.com` / `123456`
-2. **Documentos → Novo Documento**
-   - Código: **preenchido automaticamente** conforme a categoria e a ordem
-     (escolheu IT → `IT-004`; escolheu PQ → `PQ-004`). Você pode editar se quiser.
-   - Título: qualquer um
-   - Grupo/Setor: **opcional** — pode deixar em "— Sem grupo —"
-3. No editor, clique **Compilar** (ou `Ctrl+Enter`) — o PDF aparece **sem precisar salvar**
-4. **Salvar Versão** (ou `Ctrl+S`) e escreva a mensagem da versão
-5. Edite algo, salve de novo → agora existem `v1` e `v2` no **Histórico**
+O Revisor **não** tem `DOCUMENT_CREATE`, de propósito: quem aprova não redige.
+É a separação que a ISO/IEC 17025 §8.3 pede e a razão de o papel existir.
 
-### 2. Versionamento (estilo GitHub)
-
-No editor, botão **Histórico**:
-
-- Cada versão aparece como `v1`, `v2`, `v3` com autor, data e tamanho
-- **Diff** — compara com a versão anterior (verde = adicionado, vermelho = removido)
-- **Restaurar** — cria uma **nova versão** com o conteúdo antigo; nada é apagado (rastreabilidade ISO)
-
-O documento de exemplo `IT-SOLDAGEM-001` já vem com **3 versões de dois autores diferentes** — bom para ver o diff funcionando de imediato.
-
-### 3. Aprovação (`writer` → `reviewer`)
-
-1. Como `writer@email.com`, no editor: **Submeter para Aprovação** → documento fica **Em Revisão** (edição bloqueada)
-2. Saia e entre como `reviewer@email.com`
-3. **Revisões** → aba *Pendentes* → **Aprovar** ou **Rejeitar** (rejeição exige justificativa)
-   - Aprovado → documento fica **Ativo**
-   - Rejeitado → volta para **Rascunho**
-
-Já existe uma revisão pendente semeada (`IT-CALIBRACAO-002`) esperando na fila.
-
-### 4. Administração (`admin@email.com`)
-
-- **Usuários** → aprovar solicitações de cadastro, trocar papéis, **Adicionar Usuário** direto
-- **Usuários → Grupos / Setores** → criar, editar ou remover grupos (remover só é permitido se nenhum documento usar o grupo)
-- **Auditoria** → registro imutável de todas as ações (quem, o quê, quando)
-- **Documentos** → ícone de arquivar para marcar um documento como **obsoleto**
-
-### 4.1 Anexos (qualquer papel com acesso ao documento)
-
-1. No editor de um documento, clique **Anexos** (ao lado de Histórico)
-2. **Enviar arquivo** → PDF, imagem, planilha, Word, CSV ou texto, até 20MB
-3. Baixe ou remova anexos existentes na mesma lista
-
-Os documentos `IT-SOLDAGEM-001` e `PQ-001` já vêm com um anexo de exemplo (certificado
-de calibração) para você ver o fluxo funcionando de imediato.
-
-### 4.2 Notificações
-
-O sino no topo da tela mostra notificações não lidas:
-
-- Revisor é avisado quando um documento é submetido para aprovação
-- Autor é avisado quando seu documento é aprovado ou rejeitado
-- Criador do documento é avisado quando ele é marcado como obsoleto
-- Novo usuário é avisado quando seu cadastro é aprovado
-
-Clique numa notificação para ir direto ao documento/revisão relacionado. **Marcar
-todas como lidas** limpa o contador. Já existem notificações de exemplo para
-`writer@email.com` e `reviewer@email.com`.
-
-### 5. Cadastro de novo usuário
-
-1. Na tela de login: **Criar conta** → preencha e envie
-2. A conta fica **pendente**
-3. Como `admin@email.com`: **Usuários → Solicitações Pendentes** → escolha o papel → **Aprovar**
-4. Agora o novo usuário consegue entrar
-
-### 6. Trocar a própria senha
-
-Qualquer usuário: **Configurações → Alterar minha senha** (exige a senha atual).
+Uma pessoa acumula papéis (`user_roles` é tabela de ligação). Escrever **e**
+revisar é permitido — o que nunca é permitido é revisar o **próprio** documento,
+e essa regra é comparada por autor, não por papel.
 
 ---
 
-## Documentos de exemplo já cadastrados
+## As três perguntas
 
-| Código | Status | Versões | Bom para testar |
-|--------|--------|---------|-----------------|
-| `IT-SOLDAGEM-001` | Ativo | 3 (dois autores) | **Diff** entre versões, histórico, **anexo** de certificado |
-| `IT-ENSAIO-003` | Rascunho | 2 | **Editar** — fórmulas e tabela de aceitação |
-| `PQ-001` | Ativo | 2 | Tabela longa, critérios, **anexo** CSV de calibração |
-| `PQ-003` | Rascunho | 1 | Edição rápida (documento curto) |
-| `IT-CALIBRACAO-002` | Em Revisão | 2 | **Revisão pendente** na fila do revisor |
-| `PQ-002` | Rascunho | 1 | Rascunho não submetido |
-| `MQ-001` | Ativo | 1 | Manual com sumário |
-| `PO-001` | Ativo | 1 | Documento **sem grupo** |
+Toda a autorização se resume a três, e cada uma tem **um** dono no código.
+
+### 1. Pode ler este documento? — `DocumentVisibilityService.canRead`
+
+| Visibilidade | Quem lê |
+|---|---|
+| `PUBLIC` | qualquer pessoa, **sem sessão**. Só a versão em vigor, só como PDF |
+| `PRIVATE` | qualquer pessoa autenticada |
+| `RESTRICTED` | só quem está em `document_access` (por setor ou por pessoa) |
+
+O autor e quem tem `DOCUMENT_VIEW_ALL` leem sempre — senão um documento
+restrito podia ficar inacessível ao próprio dono, sem volta.
+
+### 2. Pode escrever neste documento? — `AccessControlService.assertCanEdit`
+
+Precisa de `DOCUMENT_EDIT` (ou `DOCUMENT_EDIT_ALL`) **e** de uma destas:
+
+- ter `DOCUMENT_EDIT_ALL` (administrador);
+- **ser o autor** do documento;
+- pertencer ao setor do documento.
+
+### 3. Pode aprovar? — `AccessControlService.assertCanApprove`
+
+Precisa de `REVIEW_APPROVE`, **não ser o autor**, e uma destas:
+
+- ter `DOCUMENT_EDIT_ALL` (administrador);
+- **ser o revisor designado** do documento;
+- pertencer ao setor do documento.
+
+Havendo revisor designado, só ele ou um administrador decidem — para o trabalho
+não ficar preso se a pessoa sair.
 
 ---
 
-## Observações
+## O que estava errado
 
-- Os documentos de exemplo que ainda **não existirem** são criados a cada
-  inicialização — basta reconstruir, sem apagar o banco:
+### A mesma frase para causas diferentes
 
-  ```bash
-  docker compose up -d --build
-  ```
+`Access refused (approve)` saía de dois sítios: falta de `REVIEW_APPROVE` **e**
+não pertencer ao setor. Quem tinha a permissão e estava fora do setor ouvia
+"você não tem permissão para aprovar revisões" — falso, e a mandar pedir um
+papel que já tinha. O mesmo em `assertCanEdit`.
 
-  Se quiser começar do zero (apaga todos os dados):
+Agora são motivos distintos (`approve_not_in_sector`, `edit_not_in_sector`), com
+mensagens que dizem o que fazer, e cada recusa escreve no log qual verificação
+falhou, com utilizador, documento e setor.
 
-  ```bash
-  docker compose down -v
-  docker compose up -d --build
-  ```
+### O autor trancado fora do próprio rascunho
 
-- A senha `123456` é apenas para desenvolvimento/demonstração. Em produção, troque
-  as senhas e os segredos do arquivo `.env` (`DB_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET`).
-- A sessão dura 8 horas (`JWT_EXPIRATION_MS` no `.env`). Expirada, o sistema leva
-  você de volta para a tela de login automaticamente.
-- Login e cadastro têm limite de tentativas (10/min e 5/min por IP) contra força
-  bruta. Se aparecer "Too many attempts", espere um minuto.
-- Backup: `powershell -ExecutionPolicy Bypass -File scripts\backup.ps1` — salva o
-  banco (`pg_dump`) e os anexos em `backups\`.
+O setor passou a ser obrigatório em documentos restritos, e um setor criado
+depois da instalação **nasce sem membros** — a migração V11 só pôs toda a gente
+nos grupos que existiam naquele momento. Juntando as duas coisas, quem criava um
+documento não conseguia gravar uma versão dele.
+
+O autor passa sempre. Não abre nada: ele já criou o documento e já vê o conteúdo.
+
+### O revisor designado trancado fora
+
+Mesma armadilha, do outro lado: criar setor → pôr documento nele → designar
+revisor produzia um documento que **ninguém** conseguia aprovar. Ser nomeado
+para o trabalho passou a valer mais do que pertencer ao setor.
+
+### O impasse ao editar um documento aprovado
+
+Uma revisão aprovada não pode ser reescrita — é registo da qualidade, e alterar
+os seus ficheiros sem nova versão, sem revisão e sem motivo é exatamente o que a
+ISO/IEC 17025 §8.3.2 existe para impedir. A trava estava certa; o que estava
+errado era **recusar**:
+
+```
+409  PUT /documents/{id}/files/content
+     Esta é a versão em vigor e não pode ser alterada diretamente.
+     Salve uma nova versão e edite os arquivos dela.
+```
+
+Gravar uma versão começa por escrever o ficheiro aberto na árvore — e era essa
+escrita que estava a ser recusada. Para gravar era preciso escrever; para
+escrever era preciso ter gravado. **O conselho da mensagem era impossível de
+seguir**, e o editor ficava trancado.
+
+Agora a primeira alteração num documento aprovado **abre uma revisão de
+trabalho**: copia a árvore da versão em vigor, deixa a aprovada intacta, e a
+escrita entra na nova. É o que a mensagem pedia, feito automaticamente — e é o
+que "editar um documento aprovado" significa num sistema versionado: não se
+altera o que foi aprovado, começa-se o próximo.
+
+Acontece **uma vez por ciclo**. A partir daí a versão atual já não é a vigente e
+as alterações seguintes vão todas para o mesmo rascunho. Fica registado em
+auditoria como `WORKING_REVISION_OPENED`, com a versão de origem — numa
+auditoria, uma versão sem origem explicada é uma pergunta.
+
+A resposta traz `X-Working-Commit` para o editor passar a apontar para a revisão
+nova; sem isso ele continuaria a pré-visualizar a árvore antiga. O cliente
+continua sem poder **escolher** em que versão escreve: só é informado da que o
+servidor escolheu.
+
+### Criar documento não tinha verificação nenhuma
+
+`POST /api/v1/documents` não tinha `@PreAuthorize`. Qualquer conta autenticada,
+incluindo um Leitor, criava documento chamando a API — o botão no ecrã era a
+única barreira, e um botão não é controlo de acesso. Agora exige
+`DOCUMENT_CREATE` no servidor.
+
+### Leitura de documento e de versões sem verificar visibilidade
+
+Dois caminhos passavam ao lado da regra de leitura:
+
+- `GET /api/v1/documents/{id}` recebia o utilizador e não o usava.
+- `GET .../versioning/commits`, `/branches` e `/commits/{id}/content` **nem
+  sequer recebiam o utilizador** — bastava o identificador para obter o
+  histórico e o LaTeX inteiro de qualquer documento restrito.
+
+Esconder na listagem e servir no acesso direto não é uma restrição, é uma
+sugestão. Os quatro passaram a usar `canRead`, a mesma regra do resto do
+sistema: duas regras paralelas divergem, e a que diverge é a que ninguém vê.
+
+---
+
+## Endpoints com exigência de papel
+
+| | Rota | Exige |
+|---|---|---|
+| POST | `/api/v1/documents` | `DOCUMENT_CREATE` |
+| GET/POST/PUT/DELETE | `/api/v1/users*` (gestão) | `ADMIN` |
+| PUT | `/api/v1/users/{id}/status` | `ADMIN` |
+| DELETE | `/api/v1/users/{id}` | `ADMIN` (e só contas sem histórico) |
+| POST/PUT/DELETE | `/api/v1/documents/groups*` | `ADMIN` |
+| POST | `/api/v1/documents/groups/{id}/members` | `ADMIN` |
+| PUT | `/api/v1/branding` | `ADMIN` |
+| GET | `/api/v1/audit/actions` | `ADMIN` ou `REVIEWER` |
+| POST/PUT | `/api/v1/external-documents` | `ADMIN`, `REVIEWER` ou `EDITOR` |
+| DELETE | `/api/v1/external-documents/{id}` | `ADMIN` |
+
+Sem sessão, de propósito: `POST /auth/login`, `POST /auth/register`,
+`GET /branding` (a logo aparece antes do login), e `/api/v1/public/*`, que serve
+**apenas** documentos `PUBLIC`, **apenas** a versão em vigor e **apenas** como
+PDF — nunca a árvore de ficheiros, nunca um rascunho.
+
+---
+
+## Remoção de contas
+
+Desativar é o caminho normal: a conta perde o acesso e o nome continua em cada
+documento que escreveu e em cada linha de auditoria que gerou — a ISO/IEC 17025
+exige saber quem redigiu e quem aprovou, e isso não pode depender de a pessoa
+ainda trabalhar cá.
+
+Apagar só é aceite para contas **sem histórico nenhum**; nas outras, a resposta
+diz quantos registos existem e que o caminho é desativar. Ninguém se desativa ou
+se apaga a si próprio, e o último administrador ativo não pode ser removido —
+senão o sistema fica sem quem o administre.
+
+---
+
+## Verificar numa instalação
+
+```
+DIAGNOSTICO-REVISAO.bat <id-do-pedido> <email>
+```
+
+Percorre as cinco verificações da aprovação na ordem em que o código as faz e
+diz qual reprovou, além de listar quem está no setor.

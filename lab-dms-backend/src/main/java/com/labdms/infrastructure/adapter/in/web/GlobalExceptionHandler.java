@@ -74,7 +74,12 @@ public class GlobalExceptionHandler {
             "Você tem permissão de revisor, mas não pertence ao setor deste documento. "
             + "Peça a um administrador para incluí-lo no setor, em Configurações → Setores.",
             "edit",
-            "Você não tem permissão para editar este documento.",
+            "Você não tem permissão para editar documentos. Peça a um administrador "
+            + "o papel de Editor.",
+            "edit_not_in_sector",
+            "Você tem permissão para editar, mas não pertence ao setor deste documento. "
+            + "Peça a um administrador para incluí-lo no setor, em Configurações → Setores. "
+            + "(O autor do documento e os administradores não precisam disso.)",
             "view",
             "Você não tem acesso a este documento.",
             "delete",
@@ -171,6 +176,73 @@ public class GlobalExceptionHandler {
                 LocaleContextHolder.getLocale());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ErrorResponse("ACCOUNT_DISABLED", translatedMsg));
+    }
+
+    /**
+     * Erro vindo da base de dados, com a causa em texto legível.
+     *
+     * <p>Sem isto, uma restrição violada caía no handler genérico e produzia um
+     * 500 com "erro interno" — e no log um rasto de pilha de 180 linhas onde a
+     * frase que interessa ("duplicate key", "null value in column X", o nome do
+     * índice) fica soterrada no topo, normalmente fora do que alguém copia.
+     * O resultado prático é que o defeito só é diagnosticável por quem consegue
+     * reproduzi-lo, e não por quem o encontrou.
+     *
+     * <p>O utilizador continua a ver uma frase genérica: nomes de tabela e de
+     * restrição descrevem o desenho interno e não lhe servem de nada. Quem opera
+     * o servidor passa a ter, numa única linha, o estado SQL e a mensagem.
+     */
+    @ExceptionHandler(org.springframework.dao.DataAccessException.class)
+    public ResponseEntity<ErrorResponse> handleDataAccess(org.springframework.dao.DataAccessException ex) {
+        Throwable root = ex.getMostSpecificCause();
+        String sqlState = (root instanceof java.sql.SQLException e) ? e.getSQLState() : "?";
+        String detalhe = root.getMessage() == null ? String.valueOf(ex.getMessage())
+                                                   : root.getMessage().replace('\n', ' ');
+        logger.error("Database error [SQLState {}]: {}", sqlState, detalhe, ex);
+
+        // A causa vai TAMBÉM para a resposta, e isso é deliberado.
+        //
+        // Antes ficava só no log, dentro de um rasto de pilha de 180 linhas cuja
+        // primeira linha — a única que diz o que aconteceu — é justamente a que
+        // ninguém copia. Na prática o defeito só era diagnosticável por quem
+        // conseguia reproduzi-lo. Quem o encontrou ficava com "erro interno".
+        //
+        // O que sai é a família do erro em linguagem comum, mais o nome da
+        // restrição como referência. Um nome de restrição descreve o desenho
+        // interno, sim — mas isto é uma ferramenta de laboratório atrás de
+        // autenticação, e o custo de o esconder tem sido rondas inteiras a
+        // adivinhar. Se um dia for exposta na internet, esta é a primeira linha
+        // a rever.
+        String restricao = nomeDaRestricao(detalhe);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponse("DATABASE_ERROR",
+                        explicaSqlState(sqlState) + (restricao == null ? "" : " [" + restricao + "]")));
+    }
+
+    /** A família do erro, dita de forma que aponte para a ação seguinte. */
+    private static String explicaSqlState(String sqlState) {
+        return switch (sqlState == null ? "" : sqlState) {
+            case "23505" -> "Já existe um registro com esses dados (violação de unicidade).";
+            case "23503" -> "Isto depende de um registro que não existe mais.";
+            case "23502" -> "Um campo obrigatório ficou vazio.";
+            case "23514" -> "Um valor está fora do permitido para este campo.";
+            case "22001" -> "Um texto é maior do que o campo comporta.";
+            case "40001", "40P01" -> "Duas operações colidiram ao mesmo tempo. Tente de novo.";
+            default -> "Não foi possível concluir a operação no banco de dados.";
+        };
+    }
+
+    /** O nome da restrição violada, que é o que identifica a linha exata. */
+    private static String nomeDaRestricao(String mensagem) {
+        if (mensagem == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("(?:constraint|índice|index)\\s+\"([^\"]+)\"|coluna \"([^\"]+)\"|column \"([^\"]+)\"")
+                .matcher(mensagem);
+        if (!m.find()) return null;
+        for (int g = 1; g <= m.groupCount(); g++) {
+            if (m.group(g) != null) return m.group(g);
+        }
+        return null;
     }
 
     @ExceptionHandler(Exception.class)

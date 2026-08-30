@@ -50,12 +50,14 @@ public class ProjectFileController {
     private final AccessControlService accessControl;
     private final AuditLogPort auditLog;
     private final com.labdms.application.service.DocumentVisibilityService visibility;
+    private final com.labdms.domain.port.in.CommitDocumentUseCase commitUseCase;
 
     public ProjectFileController(JdbcTemplate jdbcTemplate, ProjectFileService projectFiles,
                                   ProjectImportService importService, BlobStore blobStore,
                                   DocumentService documentService, AccessControlService accessControl,
                                   AuditLogPort auditLog,
-                                  com.labdms.application.service.DocumentVisibilityService visibility) {
+                                  com.labdms.application.service.DocumentVisibilityService visibility,
+                                  com.labdms.domain.port.in.CommitDocumentUseCase commitUseCase) {
         this.jdbcTemplate = jdbcTemplate;
         this.projectFiles = projectFiles;
         this.importService = importService;
@@ -64,6 +66,7 @@ public class ProjectFileController {
         this.accessControl = accessControl;
         this.auditLog = auditLog;
         this.visibility = visibility;
+        this.commitUseCase = commitUseCase;
     }
 
     public record FileNodeDto(String path, long sizeBytes, boolean isText, String contentType,
@@ -169,8 +172,18 @@ public class ProjectFileController {
                 ProjectImportService.guessContentType(request.path()), false);
         refreshProjectSize(documentId, commit);
 
-        return ResponseEntity.ok(new FileNodeDto(request.path(), bytes.length, true,
-                ProjectImportService.guessContentType(request.path()), false, null));
+        // Diz em que versão a escrita entrou.
+        //
+        // O cliente não envia o commit — o servidor é que escolhe qual é
+        // editável. Quando essa escolha ABRE uma revisão nova (primeira edição
+        // depois de uma aprovação), o editor continuaria a apontar para a
+        // anterior e a pré-visualizar a árvore errada. Devolver o identificador
+        // deixa-o seguir, sem lhe dar o poder de o escolher.
+        return ResponseEntity.ok()
+                .header("X-Working-Commit", commit.toString())
+                .header("Access-Control-Expose-Headers", "X-Working-Commit")
+                .body(new FileNodeDto(request.path(), bytes.length, true,
+                        ProjectImportService.guessContentType(request.path()), false, null));
     }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -443,7 +456,7 @@ public class ProjectFileController {
 
     private UUID assertCanEditAndGetCommit(UUID documentId, UserPrincipal principal) {
         Document doc = documentService.findById(documentId);
-        accessControl.assertCanEdit(principal.getId(), doc.getDocumentGroupId());
+        accessControl.assertCanEdit(principal.getId(), doc);
         if (doc.getStatus() == com.labdms.domain.model.document.DocumentStatus.IN_REVIEW
                 || doc.getStatus() == com.labdms.domain.model.document.DocumentStatus.OBSOLETE) {
             throw new IllegalStateException("This document is locked for editing (" + doc.getStatus() + ")");
@@ -470,11 +483,65 @@ public class ProjectFileController {
         // been approved, and editing it is ordinary work.
         if (doc.getStatus() == com.labdms.domain.model.document.DocumentStatus.ACTIVE
                 && commit.equals(doc.getOfficialCommitId())) {
-            throw new IllegalStateException(
-                    "Esta é a versão em vigor e não pode ser alterada diretamente. "
-                    + "Salve uma nova versão e edite os arquivos dela.");
+            return openWorkingRevision(documentId, principal.getId(), doc.getOfficialCommitId());
         }
         return commit;
+    }
+
+    /**
+     * Abre uma revisão de trabalho a partir da versão em vigor.
+     *
+     * <p>Isto respondia 409 com "salve uma nova versão e edite os arquivos dela"
+     * — um conselho impossível de seguir. Gravar uma versão começa por escrever
+     * o ficheiro aberto na árvore, e era precisamente essa escrita que estava a
+     * ser recusada: para gravar era preciso escrever, e para escrever era
+     * preciso ter gravado. O editor ficava trancado num círculo, e a mensagem
+     * mandava o utilizador pela porta fechada.
+     *
+     * <p>A regra que a trava protege continua inteira: a revisão aprovada não é
+     * tocada. O que muda é que a primeira alteração deixa de ser recusada e
+     * passa a fazer o que a mensagem pedia — criar a nova revisão, copiando a
+     * árvore — e a escrita entra nessa. É o que "editar um documento aprovado"
+     * significa num sistema versionado: não se altera o que foi aprovado,
+     * começa-se o próximo.
+     *
+     * <p>Acontece uma vez por ciclo: a partir daqui a versão atual já não é a
+     * vigente, e as alterações seguintes vão todas para o mesmo rascunho, sem
+     * criar versão nenhuma.
+     */
+    private UUID openWorkingRevision(UUID documentId, UUID userId, UUID officialCommitId) {
+        List<UUID> branch = jdbcTemplate.queryForList(
+                "SELECT id FROM branches WHERE document_id = ? AND is_default = true",
+                UUID.class, documentId);
+        if (branch.isEmpty()) {
+            throw new IllegalStateException("This document has no default branch");
+        }
+
+        // O texto da raiz vem da versão em vigor. Num projeto multi-ficheiro o
+        // serviço relê-o da árvore e ignora este valor; num documento de
+        // ficheiro único é ele que forma o conteúdo da nova versão.
+        List<String> source = jdbcTemplate.queryForList("""
+                SELECT s.latex_source FROM content_snapshots s
+                  JOIN commits c ON c.content_snapshot_id = s.id
+                 WHERE c.id = ?
+                """, String.class, officialCommitId);
+
+        var created = commitUseCase.execute(new com.labdms.application.dto.command.CommitDocumentCommand(
+                userId, documentId, branch.get(0),
+                source.isEmpty() ? null : source.get(0),
+                "Nova revisão aberta para edição"));
+
+        jdbcTemplate.update("UPDATE commits SET change_reason = ? WHERE id = ?",
+                "Revisão iniciada a partir da versão em vigor.", created.getId());
+
+        // Fica registado que uma revisão nasceu de uma edição, e não de alguém a
+        // carregar em "Salvar Versão": numa auditoria, uma versão sem origem
+        // explicada é uma pergunta.
+        audit(userId, "WORKING_REVISION_OPENED", documentId,
+                Map.of("commitId", created.getId().toString(),
+                       "fromOfficial", String.valueOf(officialCommitId)));
+
+        return created.getId();
     }
 
     /** Enforces the per-project ceiling, discounting the file being replaced. */

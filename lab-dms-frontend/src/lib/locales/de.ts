@@ -446,6 +446,8 @@ const de: Record<string, string> = {
   'users.deleteConfirmTitle': 'Konto löschen?',
   'users.deleteConfirmBody': '«{name}» endgültig löschen. Nur möglich, wenn das Konto nie Dokumente angelegt oder Aufzeichnungen erzeugt hat — deaktivieren Sie es andernfalls, um den Verlauf zu erhalten.',
   'settings.languageHint': 'Wird in Ihrem Konto gespeichert und begleitet Sie auf jedem Computer.',
+  'editor.autoCommitMessage': 'Beim Einreichen gespeicherte Version: {title}',
+  'editor.autoCommitDone': 'Ihre Änderungen wurden vor dem Senden als neue Version gespeichert.',
   'editor.previewStale': 'Diese Vorschau stammt aus der letzten erfolgreichen Kompilierung. Beheben Sie die Probleme und kompilieren Sie erneut.',
   'editor.pdfPreview': 'PDF-Vorschau',
   'editor.viewerFellBack': 'Die Seitenansicht ließ sich nicht öffnen. Das Dokument selbst ist in Ordnung — der Grund unten stammt vom Anzeigeprogramm.',

@@ -129,6 +129,34 @@ public class VersioningController {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    private com.labdms.application.service.DocumentVisibilityService visibility;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setVisibility(com.labdms.application.service.DocumentVisibilityService visibility) {
+        this.visibility = visibility;
+    }
+
+    /**
+     * Ninguém lê a história de um documento que não pode ler.
+     *
+     * <p>Os três métodos de leitura deste controlador não recebiam sequer o
+     * utilizador: bastava saber o identificador para obter o histórico de
+     * versões e o LaTeX inteiro de qualquer documento, incluindo os restritos.
+     * A visibilidade era decidida noutro sítio e este caminho passava ao lado
+     * dela — que é o modo clássico de um controlo de acesso existir e não
+     * proteger nada.
+     *
+     * <p>Usa a mesma regra de leitura que serve o resto do sistema, em vez de
+     * uma verificação própria: duas regras paralelas divergem, e a que diverge
+     * é sempre a que ninguém está a olhar.
+     */
+    private void assertCanRead(UUID documentId, UserPrincipal principal) {
+        UUID userId = principal == null ? null : principal.getId();
+        if (!visibility.canRead(userId, documentId)) {
+            throw new com.labdms.domain.exception.UnauthorizedAccessException("view");
+        }
+    }
+
     /**
      * A version in the document history.
      *
@@ -145,7 +173,9 @@ public class VersioningController {
 
     @GetMapping("/commits")
     @Operation(summary = "Get version history for a document (newest first)")
-    public ResponseEntity<List<CommitHistoryDto>> getCommits(@PathVariable UUID documentId) {
+    public ResponseEntity<List<CommitHistoryDto>> getCommits(@PathVariable UUID documentId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        assertCanRead(documentId, principal);
 
         List<CommitHistoryDto> commits = jdbcTemplate.query("""
             SELECT c.id, c.message, c.change_reason, u.full_name AS author_name, c.created_at,
@@ -184,7 +214,9 @@ public class VersioningController {
 
     @GetMapping("/branches")
     @Operation(summary = "List branches of a document")
-    public ResponseEntity<List<BranchDto>> getBranches(@PathVariable UUID documentId) {
+    public ResponseEntity<List<BranchDto>> getBranches(@PathVariable UUID documentId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        assertCanRead(documentId, principal);
         return ResponseEntity.ok(jdbcTemplate.query(
             "SELECT id, name, is_default, status, head_commit_id, updated_at " +
             "FROM branches WHERE document_id = ? ORDER BY is_default DESC, name",
@@ -243,7 +275,9 @@ public class VersioningController {
     @Operation(summary = "Get LaTeX content for a specific commit")
     public ResponseEntity<CommitContentDto> getCommitContent(
             @PathVariable UUID documentId,
-            @PathVariable UUID commitId) {
+            @PathVariable UUID commitId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        assertCanRead(documentId, principal);
 
         // queryForList, not queryForObject: V9 made commits.content_snapshot_id
         // nullable (a version can now be a file tree with no single-string

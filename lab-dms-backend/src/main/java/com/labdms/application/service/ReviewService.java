@@ -58,7 +58,7 @@ public class ReviewService implements SubmitReviewUseCase, ApproveReviewUseCase 
         Document document = documentRepository.findById(command.documentId())
                 .orElseThrow(() -> new DocumentNotFoundException(command.documentId()));
 
-        accessControlService.assertCanEdit(command.userId(), document.getDocumentGroupId());
+        accessControlService.assertCanEdit(command.userId(), document);
 
         // Transition document to IN_REVIEW
         document.transitionTo(DocumentStatus.IN_REVIEW);

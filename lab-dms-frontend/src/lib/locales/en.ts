@@ -442,6 +442,8 @@ const en: Record<string, string> = {
   'users.deleteConfirmTitle': 'Delete the account?',
   'users.deleteConfirmBody': 'Delete “{name}” for good. Only possible if the account never created documents or produced records — otherwise deactivate it so the history stays intact.',
   'settings.languageHint': 'Saved to your account and follows you on any computer.',
+  'editor.autoCommitMessage': 'Version saved on submission: {title}',
+  'editor.autoCommitDone': 'Your changes were saved as a new version before sending.',
   'editor.previewStale': 'This preview is from the last compilation that worked. Fix the problems and compile again.',
   'editor.pdfPreview': 'PDF preview',
   'editor.viewerFellBack': 'The paged view did not open. The document itself is fine — the reason below comes from the viewer.',

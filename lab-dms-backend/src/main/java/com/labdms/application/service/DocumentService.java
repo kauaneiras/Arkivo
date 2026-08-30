@@ -60,7 +60,7 @@ public class DocumentService implements CreateDocumentUseCase, SearchDocumentsUs
     @Override
     public Document execute(CreateDocumentCommand command) {
         // Access control
-        accessControlService.assertCanEdit(command.userId(), command.documentGroupId());
+        accessControlService.assertCanEditInSector(command.userId(), command.documentGroupId());
 
         // Fails fast with a clear message if the chosen reviewer cannot review
         // (no permission, inactive, or is the author themselves).
@@ -317,7 +317,7 @@ public class DocumentService implements CreateDocumentUseCase, SearchDocumentsUs
         if (newStatus == DocumentStatus.ACTIVE || newStatus == DocumentStatus.OBSOLETE) {
             accessControlService.assertCanApprove(userId, documentId);
         } else {
-            accessControlService.assertCanEdit(userId, document.getDocumentGroupId());
+            accessControlService.assertCanEdit(userId, document);
         }
 
         DocumentStatus previousStatus = document.getStatus();

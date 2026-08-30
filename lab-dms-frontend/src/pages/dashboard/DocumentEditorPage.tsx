@@ -137,6 +137,11 @@ export default function DocumentEditorPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [selectedCommitId, setSelectedCommitId] = useState<string | null>(null);
+  // Espelhos para uso dentro de callbacks definidos antes de fetchCommits, e
+  // para ler o valor corrente sem o capturar numa closure antiga.
+  const selectedCommitIdRef = useRef<string | null>(null);
+  useEffect(() => { selectedCommitIdRef.current = selectedCommitId; }, [selectedCommitId]);
+  const fetchCommitsRef = useRef<((selectLatest?: boolean) => void) | null>(null);
   // "?panel=history" lets the documents list jump straight into the history,
   // which is where people go to inspect or change the version in force.
   const [searchParams] = useSearchParams();
@@ -299,10 +304,22 @@ export default function DocumentEditorPage() {
     if (!openPath || !openIsTextRef.current) return;
     // No commitId on writes: the server picks the editable version and refuses
     // if the document is locked, so the client cannot target an approved one.
-    await api.put(`/documents/${id}/files/content`, {
+    const res = await api.put(`/documents/${id}/files/content`, {
       path: openPath, content: contentRef.current,
     });
     markDirty(false);
+
+    // Editar um documento aprovado abre uma revisão nova do lado do servidor —
+    // a versão em vigor é registo da qualidade e não se reescreve. Quando isso
+    // acontece, o editor tem de passar a apontar para a revisão nova; se
+    // continuasse na anterior, pré-visualizaria a árvore antiga e a lista de
+    // versões ficaria a mentir sobre onde o trabalho está a ser feito.
+    const working: string | undefined = res.headers?.['x-working-commit'];
+    if (working && working !== selectedCommitIdRef.current) {
+      setSelectedCommitId(working);
+      selectedCommitIdRef.current = working;
+      fetchCommitsRef.current?.(false);
+    }
   }, [id, openPath, markDirty]);
 
   /** Opens a file from the tree: text goes into the editor, images render inline. */
@@ -546,6 +563,9 @@ export default function DocumentEditorPage() {
     }
   }, [id, loadCommitContent, loadPdf, handleCompile, fetchProjectFiles]);
 
+  // Publicada para quem foi definido antes dela — ver persistOpenFile.
+  useEffect(() => { fetchCommitsRef.current = fetchCommits; }, [fetchCommits]);
+
   useEffect(() => {
     fetchDocument();
     fetchCommits();
@@ -631,9 +651,12 @@ export default function DocumentEditorPage() {
       lastCompiledRef.current = null;
       fetchCommits();
       fetchDocument();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast('error', t('editor.saveError'));
+      // O servidor explica a recusa — falta de permissão, setor, documento
+      // bloqueado. Substituir isso por "erro ao salvar" apagava a única
+      // informação capaz de dizer ao utilizador o que fazer a seguir.
+      toast('error', err.response?.data?.message ?? t('editor.saveError'));
     } finally {
       setIsSaving(false);
     }
@@ -641,10 +664,39 @@ export default function DocumentEditorPage() {
 
   /* --------------------------- Submit review -------------------------- */
 
+  /**
+   * Submete para aprovação — gravando primeiro, se houver o que gravar.
+   *
+   * <p>A revisão recai sobre a última versão GRAVADA. Quem editava e carregava
+   * em "Submeter" sem gravar mandava para aprovação o texto anterior, sem
+   * qualquer aviso: o revisor lia uma coisa e o autor julgava ter enviado
+   * outra — e o que fica aprovado, e em vigor, é o que o revisor viu. Numa
+   * norma que existe para garantir que o documento aprovado é o documento
+   * certo, isto é o pior tipo de falha silenciosa.
+   *
+   * <p>A gravação vem antes e, se falhar, a submissão NÃO acontece: enviar para
+   * revisão um conteúdo que não conseguiu ser gravado repetiria o mesmo engano
+   * por outro caminho.
+   */
   const handleSubmitReview = async () => {
     if (!reviewTitle.trim()) return;
     setIsSubmittingReview(true);
     try {
+      if (isDirtyRef.current) {
+        if (projectFiles.length > 0) await persistOpenFile();
+        await api.post(`/documents/${id}/versioning/commits`, {
+          latexSource: contentRef.current,
+          message: t('editor.autoCommitMessage').replace('{title}', reviewTitle.trim()),
+          // 8.3.2 c) exige o motivo da alteração. Aqui ele é o próprio pedido de
+          // revisão, que é uma resposta honesta: a alteração foi feita para ser
+          // submetida a aprovação, e o texto do pedido descreve-a.
+          changeReason: reviewDescription.trim() || reviewTitle.trim(),
+        });
+        markDirty(false);
+        lastCompiledRef.current = null;
+        toast('info', t('editor.autoCommitDone'));
+      }
+
       await api.post(`/documents/${id}/reviews`, {
         title: reviewTitle.trim(),
         description: reviewDescription.trim() || null,
@@ -653,10 +705,14 @@ export default function DocumentEditorPage() {
       setSubmitModalOpen(false);
       setReviewTitle('');
       setReviewDescription('');
+      fetchCommits();
       fetchDocument();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast('error', t('editor.submitError'));
+      // A mensagem do servidor explica a recusa (falta de permissão, setor,
+      // documento bloqueado). Trocá-la por um texto genérico era o que fazia
+      // "não consigo submeter" ser impossível de diagnosticar de fora.
+      toast('error', err.response?.data?.message ?? t('editor.submitError'));
     } finally {
       setIsSubmittingReview(false);
     }

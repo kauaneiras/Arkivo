@@ -445,6 +445,8 @@ const zh: Record<string, string> = {
   'users.deleteConfirmTitle': '删除该账户？',
   'users.deleteConfirmBody': '彻底删除“{name}”。仅当该账户从未创建过文件或产生过记录时才可删除 — 否则请将其停用，以保留历史记录。',
   'settings.languageHint': '该设置保存在您的账户中，在任何电脑上都会生效。',
+  'editor.autoCommitMessage': '提交时保存的版本：{title}',
+  'editor.autoCommitDone': '发送前已将您的更改保存为新版本。',
   'editor.previewStale': '此预览来自上一次成功的编译。请修正问题后重新编译。',
   'editor.pdfPreview': 'PDF 预览',
   'editor.viewerFellBack': '分页视图未能打开。文件本身没有问题 — 下方的原因来自阅读器。',
