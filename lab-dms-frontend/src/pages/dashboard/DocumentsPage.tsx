@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
 import VisibilityModal from '../../components/VisibilityModal';
-import { Plus, Search, Edit3, Archive, FileText, History, AlertTriangle, Download, CalendarClock, Globe, Building2, Lock } from 'lucide-react';
+import { Plus, Search, Edit3, Eye, Archive, FileText, History, AlertTriangle, Download, CalendarClock, Globe, Building2, Lock } from 'lucide-react';
 import CreateDocumentModal from './CreateDocumentModal';
 import { useI18n, formatDate } from '../../lib/i18n';
 import { DocStatusBadge, ConfirmModal, EmptyState, TableSkeleton, useToast } from '../../components/ui';
 import { useAuthStore } from '../../store/authStore';
 import { cn } from '../../lib/utils';
+import { porqueNaoPodeEditar } from '../../lib/permissoes';
 
 const DOC_TYPES = ['IT', 'PQ', 'PO', 'MQ'];
 const DOC_STATUSES = ['DRAFT', 'IN_REVIEW', 'ACTIVE', 'OBSOLETE'];
@@ -19,6 +20,7 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(true);
   // Espelho da regra do servidor, não a regra em si: quem não tem a permissão
   // também é recusado pelo endpoint. Aqui só evitamos oferecer o que vai falhar.
+  const user = useAuthStore((s) => s.user);
   const canCreate = useAuthStore((s) => s.can('DOCUMENT_CREATE'));
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -278,13 +280,31 @@ export default function DocumentsPage() {
                         >
                           <History className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/documents/${doc.id}/edit`); }}
-                          className="p-1.5 text-textMuted hover:text-primary hover:bg-blue-50 rounded-md transition-colors"
-                          title={t('docs.edit')}
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
+                        {/* Este botão ABRE o documento — e o editor é também o
+                            leitor. Desativá-lo para quem não pode escrever
+                            tiraria a leitura a quem tem direito a ela, que é
+                            pior do que oferecer um lápis enganador. Em vez de o
+                            bloquear, ele diz a verdade: lápis para quem edita,
+                            olho para quem só lê. Quem entra sem poder escrever
+                            encontra os botões de gravar e submeter desativados,
+                            com o motivo. */}
+                        {(() => {
+                          const soLeitura = !!porqueNaoPodeEditar(user, {
+                            createdBy: doc.createdBy,
+                            assignedReviewerId: doc.assignedReviewerId,
+                            documentGroupId: doc.documentGroupId,
+                          });
+                          return (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/documents/${doc.id}/edit`); }}
+                              className="p-1.5 text-textMuted hover:text-primary hover:bg-blue-50 rounded-md transition-colors"
+                              title={soLeitura ? t('docs.openReadOnly') : t('docs.edit')}
+                              aria-label={soLeitura ? t('docs.openReadOnly') : t('docs.edit')}
+                            >
+                              {soLeitura ? <Eye className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
+                            </button>
+                          );
+                        })()}
                         {doc.status !== 'OBSOLETE' && (
                           <button
                             onClick={(e) => { e.stopPropagation(); setObsoleteTarget(doc); }}

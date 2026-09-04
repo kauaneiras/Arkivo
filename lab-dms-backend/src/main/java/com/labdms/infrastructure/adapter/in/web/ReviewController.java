@@ -80,6 +80,17 @@ public class ReviewController {
     /**
      * Review request enriched with document and requester info for list views.
      */
+    /**
+     * Uma revisão pendente, com o que o ecrã precisa para saber se ESTA pessoa
+     * pode decidir.
+     *
+     * <p>Os três últimos campos existem só para isso. A regra de aprovação é
+     * "tem REVIEW_APPROVE, não é o autor, e é administrador OU o revisor
+     * designado OU membro do setor" — sem o autor, o revisor designado e o
+     * setor, o ecrã não consegue prever a resposta e acaba a oferecer botões que
+     * o servidor recusa. Nada aqui é sensível: são identificadores de pessoas
+     * que a própria listagem já mostra pelo nome.
+     */
     public record ReviewListItemDto(
             UUID id,
             UUID documentId,
@@ -89,7 +100,10 @@ public class ReviewController {
             String description,
             String status,
             String requestedByName,
-            Instant createdAt
+            Instant createdAt,
+            UUID documentCreatedBy,
+            UUID assignedReviewerId,
+            UUID documentGroupId
     ) {}
 
     @GetMapping("/reviews")
@@ -100,7 +114,8 @@ public class ReviewController {
 
         StringBuilder sql = new StringBuilder(
             "SELECT rr.id, rr.document_id, d.code AS document_code, d.title AS document_title, " +
-            "rr.title, rr.description, rr.status, u.full_name AS requested_by_name, rr.created_at " +
+            "rr.title, rr.description, rr.status, u.full_name AS requested_by_name, rr.created_at, " +
+            "d.created_by AS document_created_by, d.assigned_reviewer_id, d.document_group_id " +
             "FROM review_requests rr " +
             "JOIN documents d ON d.id = rr.document_id " +
             "JOIN users u ON u.id = rr.requested_by "
@@ -124,7 +139,10 @@ public class ReviewController {
                 rs.getString("description"),
                 rs.getString("status"),
                 rs.getString("requested_by_name"),
-                rs.getTimestamp("created_at").toInstant()
+                rs.getTimestamp("created_at").toInstant(),
+                rs.getObject("document_created_by", UUID.class),
+                rs.getObject("assigned_reviewer_id", UUID.class),
+                rs.getObject("document_group_id", UUID.class)
         ), args);
 
         return ResponseEntity.ok(reviews);
@@ -138,7 +156,8 @@ public class ReviewController {
 
         List<ReviewListItemDto> reviews = jdbcTemplate.query(
             "SELECT rr.id, rr.document_id, d.code AS document_code, d.title AS document_title, " +
-            "rr.title, rr.description, rr.status, u.full_name AS requested_by_name, rr.created_at " +
+            "rr.title, rr.description, rr.status, u.full_name AS requested_by_name, rr.created_at, " +
+            "d.created_by AS document_created_by, d.assigned_reviewer_id, d.document_group_id " +
             "FROM review_requests rr " +
             "JOIN documents d ON d.id = rr.document_id " +
             "JOIN users u ON u.id = rr.requested_by " +
@@ -152,7 +171,10 @@ public class ReviewController {
                 rs.getString("description"),
                 rs.getString("status"),
                 rs.getString("requested_by_name"),
-                rs.getTimestamp("created_at").toInstant()
+                rs.getTimestamp("created_at").toInstant(),
+                rs.getObject("document_created_by", UUID.class),
+                rs.getObject("assigned_reviewer_id", UUID.class),
+                rs.getObject("document_group_id", UUID.class)
             ),
             documentId
         );

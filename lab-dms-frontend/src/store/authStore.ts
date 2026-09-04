@@ -62,7 +62,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { default: api } = await import('../lib/api');
     try {
       const res = await api.get('/auth/me');
-      const user: User = res.data;
+      const d = res.data;
+
+      // A resposta é validada antes de substituir a sessão.
+      //
+      // Sem isto, qualquer coisa inesperada no corpo — um proxy que devolve
+      // outra coisa, uma rota que muda, um array vazio — sobrescrevia o
+      // utilizador por algo sem `roles`. E como os botões agora dependem das
+      // permissões, o efeito não era um aviso: era a interface inteira a
+      // trancar-se, sem erro nenhum à vista. Uma sessão válida guardada vale
+      // mais do que uma resposta que não parece uma identidade.
+      const valido = d && typeof d === 'object' && !Array.isArray(d)
+        && typeof d.id === 'string' && Array.isArray(d.roles);
+      if (!valido) return;
+
+      const user: User = d;
       localStorage.setItem('user_info', JSON.stringify(user));
       set({ user, isAuthenticated: true });
     } catch {

@@ -20,15 +20,18 @@ public class AuthController {
     private final JwtTokenProvider tokenProvider;
     private final com.labdms.infrastructure.adapter.out.persistence.repository.UserJpaRepository userRepository;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     public AuthController(AuthenticationManager authenticationManager, 
                           JwtTokenProvider tokenProvider,
                           com.labdms.infrastructure.adapter.out.persistence.repository.UserJpaRepository userRepository,
-                          org.springframework.security.crypto.password.PasswordEncoder passwordEncoder) {
+                          org.springframework.security.crypto.password.PasswordEncoder passwordEncoder,
+                          org.springframework.jdbc.core.JdbcTemplate jdbcTemplate) {
         this.authenticationManager = authenticationManager;
         this.tokenProvider = tokenProvider;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @PostMapping("/login")
@@ -64,7 +67,7 @@ public class AuthController {
      * ecrã lê isto ao carregar e passa a refletir o estado real.
      */
     @GetMapping("/me")
-    @Operation(summary = "Current identity, roles and permissions")
+    @Operation(summary = "Current identity, roles, permissions and sectors")
     public ResponseEntity<UserInfoDto> me(
             @org.springframework.security.core.annotation.AuthenticationPrincipal
                     com.labdms.infrastructure.security.UserPrincipal principal) {
@@ -72,8 +75,23 @@ public class AuthController {
         java.util.List<String> authorities = principal.getAuthorities().stream()
                 .map(org.springframework.security.core.GrantedAuthority::getAuthority)
                 .collect(java.util.stream.Collectors.toList());
+
+        // Os setores a que pertence viajam com a identidade.
+        //
+        // Sem eles o ecrã não consegue prever a decisão do servidor: a regra de
+        // edição é "administrador, autor, OU membro do setor", e faltando a
+        // última parte a interface teria de escolher entre oferecer botões que
+        // vão ser recusados ou esconder botões que funcionariam. Nenhuma das
+        // duas é aceitável, e adivinhar é como se chega a ambas.
+        //
+        // Não é informação sensível: é a lista dos setores da própria pessoa,
+        // que ela já vê no seu perfil.
+        java.util.List<java.util.UUID> groups = jdbcTemplate.queryForList(
+                "SELECT group_id FROM document_group_members WHERE user_id = ?",
+                java.util.UUID.class, principal.getId());
+
         return ResponseEntity.ok(new UserInfoDto(principal.getId(), principal.getUsername(),
-                principal.getEmail(), principal.getFullName(), authorities));
+                principal.getEmail(), principal.getFullName(), authorities, groups));
     }
 
     @PostMapping("/register")
@@ -102,7 +120,21 @@ public class AuthController {
     public record LoginRequest(String username, String password) {}
     public record RegisterRequest(String email, String fullName, String password) {}
     public record MessageResponse(String message) {}
-    public record UserInfoDto(java.util.UUID id, String username, String email, String fullName, java.util.List<String> roles) {}
+    /**
+     * Quem está autenticado, o que pode e a que setores pertence.
+     *
+     * <p>{@code roles} traz as <i>authorities</i> do Spring, que são papéis E
+     * permissões juntos ('ROLE_ADMIN' ao lado de 'DOCUMENT_CREATE'). O nome é
+     * herdado e ficou mais estreito que o conteúdo.
+     */
+    public record UserInfoDto(java.util.UUID id, String username, String email, String fullName,
+                              java.util.List<String> roles, java.util.List<java.util.UUID> groups) {
+        /** Compatibilidade com quem ainda constrói isto sem os setores. */
+        public UserInfoDto(java.util.UUID id, String username, String email, String fullName,
+                           java.util.List<String> roles) {
+            this(id, username, email, fullName, roles, java.util.List.of());
+        }
+    }
     public record JwtAuthenticationResponse(String accessToken, String tokenType, UserInfoDto user) {
         public JwtAuthenticationResponse(String accessToken, UserInfoDto user) {
             this(accessToken, "Bearer", user);

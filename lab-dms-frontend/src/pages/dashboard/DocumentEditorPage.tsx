@@ -22,6 +22,8 @@ import { Modal, ConfirmModal, DocStatusBadge, useToast } from '../../components/
 import FileTree, { type FileNode } from '../../components/FileTree';
 import { diffLines, collapseDiff } from '../../lib/diff';
 import { cn } from '../../lib/utils';
+import { porqueNaoPodeEditar } from '../../lib/permissoes';
+import { useAuthStore } from '../../store/authStore';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -74,6 +76,7 @@ export default function DocumentEditorPage() {
   const { t, lang } = useI18n();
   const { toast } = useToast();
 
+  const authUser = useAuthStore((s) => s.user);
   const [doc, setDoc] = useState<any>(null);
   const [content, setContent] = useState('');
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
@@ -204,6 +207,16 @@ export default function DocumentEditorPage() {
   const lastCompiledRef = useRef<string | null>(null);
 
   const isLocked = doc?.status === 'IN_REVIEW' || doc?.status === 'OBSOLETE';
+
+  // Por que esta pessoa não pode escrever neste documento — ou null, se pode.
+  // Mesma regra que o servidor aplica; aqui serve para não oferecer o que vai
+  // ser recusado, e para dizer o motivo antes de a pessoa tentar.
+  const recusaEditar = porqueNaoPodeEditar(authUser, {
+    createdBy: doc?.createdBy,
+    assignedReviewerId: doc?.assignedReviewerId,
+    documentGroupId: doc?.documentGroupId,
+    status: doc?.status,
+  });
   const latexExtensions = useMemo(() => [StreamLanguage.define(stex)], []);
 
   const setPdfUrl = useCallback((url: string | null) => {
@@ -957,10 +970,15 @@ export default function DocumentEditorPage() {
             <Paperclip className="w-4 h-4" />
             <span className="hidden xl:inline">{t('editor.attachments')}</span>
           </button>
+          {/* Desativado com o motivo, nunca escondido: quem não pode gravar
+              precisa de saber que é falta de papel ou de setor, e não que a
+              função não existe. */}
           <button
             onClick={() => { setCommitMessage(''); setSaveModalOpen(true); }}
-            disabled={isSaving || isLocked}
-            className="btn-outline flex items-center gap-2 py-1.5 px-3 text-sm"
+            disabled={isSaving || isLocked || !!recusaEditar}
+            title={recusaEditar ? t(recusaEditar) : undefined}
+            className={cn('btn-outline flex items-center gap-2 py-1.5 px-3 text-sm',
+                          recusaEditar && 'opacity-50 cursor-not-allowed')}
           >
             <Save className="w-4 h-4" />
             <span className="hidden xl:inline">{isSaving ? t('editor.saving') : t('editor.saveDraft')}</span>
@@ -974,10 +992,14 @@ export default function DocumentEditorPage() {
             <Play className="w-4 h-4" />
             <span className="hidden xl:inline">{isCompiling ? t('editor.compiling') : t('editor.compile')}</span>
           </button>
+          {/* Submeter é uma escrita: passa a gravar a versão antes de enviar,
+              por isso segue a mesma regra de edição. */}
           <button
             onClick={() => setSubmitModalOpen(true)}
-            disabled={isLocked}
-            className="btn-primary flex items-center gap-2 py-1.5 px-3 text-sm"
+            disabled={isLocked || !!recusaEditar}
+            title={recusaEditar ? t(recusaEditar) : undefined}
+            className={cn('btn-primary flex items-center gap-2 py-1.5 px-3 text-sm',
+                          recusaEditar && 'opacity-50 cursor-not-allowed')}
           >
             <CheckCircle className="w-4 h-4" />
             <span className="hidden xl:inline">{t('editor.submitReview')}</span>

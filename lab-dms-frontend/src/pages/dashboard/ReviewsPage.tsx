@@ -4,6 +4,7 @@ import api from '../../lib/api';
 import { useI18n, formatDate } from '../../lib/i18n';
 import { Modal, ReviewStatusBadge, EmptyState, TableSkeleton, useToast } from '../../components/ui';
 import { useAuthStore } from '../../store/authStore';
+import { porqueNaoPodeAprovar } from '../../lib/permissoes';
 import { GitPullRequest, Check, X, ExternalLink } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -17,6 +18,9 @@ interface ReviewItem {
   status: string;
   requestedByName: string;
   createdAt: string;
+  documentCreatedBy?: string | null;
+  assignedReviewerId?: string | null;
+  documentGroupId?: string | null;
 }
 
 export default function ReviewsPage() {
@@ -31,7 +35,6 @@ export default function ReviewsPage() {
   const { toast } = useToast();
   const { user } = useAuthStore();
 
-  const canApprove = user?.roles?.some((r) => r === 'ROLE_ADMIN' || r === 'ROLE_REVIEWER' || r === 'REVIEW_APPROVE');
 
   const fetchReviews = useCallback(async () => {
     setLoading(true);
@@ -147,22 +150,48 @@ export default function ReviewsPage() {
                         >
                           <ExternalLink className="w-4 h-4" />
                         </button>
-                        {review.status === 'OPEN' && canApprove && (
-                          <>
-                            <button
-                              onClick={() => { setDecisionTarget({ review, decision: 'APPROVED' }); setComments(''); }}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-secondary hover:bg-secondary-dark rounded-md transition-colors"
-                            >
-                              <Check className="w-3.5 h-3.5" /> {t('reviews.approve')}
-                            </button>
-                            <button
-                              onClick={() => { setDecisionTarget({ review, decision: 'REJECTED' }); setComments(''); }}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-md transition-colors"
-                            >
-                              <X className="w-3.5 h-3.5" /> {t('reviews.reject')}
-                            </button>
-                          </>
-                        )}
+                        {/* Desativados, não escondidos.
+                            Um botão que desaparece deixa a pessoa sem saber se a
+                            função existe, se está no sítio errado, ou se lhe
+                            falta alguma coisa — e a resposta a essa dúvida custa
+                            uma pergunta a um colega. Apagado e com o motivo ao
+                            passar o rato, ela lê e resolve sozinha: pedir um
+                            papel, pedir entrada num setor, ou perceber que
+                            escreveu o documento e por isso não o aprova. */}
+                        {review.status === 'OPEN' && (() => {
+                          const recusa = porqueNaoPodeAprovar(user, {
+                            createdBy: review.documentCreatedBy,
+                            assignedReviewerId: review.assignedReviewerId,
+                            documentGroupId: review.documentGroupId,
+                          });
+                          const motivo = recusa ? t(recusa) : undefined;
+                          return (
+                            <>
+                              <button
+                                onClick={() => { setDecisionTarget({ review, decision: 'APPROVED' }); setComments(''); }}
+                                disabled={!!recusa}
+                                title={motivo}
+                                className={cn(
+                                  'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-secondary rounded-md transition-colors',
+                                  recusa ? 'opacity-40 cursor-not-allowed' : 'hover:bg-secondary-dark',
+                                )}
+                              >
+                                <Check className="w-3.5 h-3.5" /> {t('reviews.approve')}
+                              </button>
+                              <button
+                                onClick={() => { setDecisionTarget({ review, decision: 'REJECTED' }); setComments(''); }}
+                                disabled={!!recusa}
+                                title={motivo}
+                                className={cn(
+                                  'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-md transition-colors',
+                                  recusa ? 'opacity-40 cursor-not-allowed' : 'hover:bg-red-100',
+                                )}
+                              >
+                                <X className="w-3.5 h-3.5" /> {t('reviews.reject')}
+                              </button>
+                            </>
+                          );
+                        })()}
                       </div>
                     </td>
                   </tr>
