@@ -780,6 +780,8 @@ const zh: Record<string, string> = {
   'action.PROJECT_FILE_DELETED': '文件已删除',
   'action.PROJECT_FILE_RENAMED': '文件已重命名',
   'users.ssoHint': '单点登录账户（Keycloak）：密码由身份提供方管理。',
+  'dashboard.storage': '存储',
+  'dashboard.storageHint': '去重节省 {pct}%',
 };
 
 export default zh;

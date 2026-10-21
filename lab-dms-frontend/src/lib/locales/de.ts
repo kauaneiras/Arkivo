@@ -781,6 +781,8 @@ const de: Record<string, string> = {
   'action.PROJECT_FILE_DELETED': 'Datei entfernt',
   'action.PROJECT_FILE_RENAMED': 'Datei umbenannt',
   'users.ssoHint': 'Single-Sign-on-Konto (Keycloak): Das Passwort wird beim Identitätsanbieter verwaltet.',
+  'dashboard.storage': 'Speicher',
+  'dashboard.storageHint': 'Deduplizierung spart {pct}%',
 };
 
 export default de;

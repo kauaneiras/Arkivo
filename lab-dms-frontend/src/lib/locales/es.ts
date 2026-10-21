@@ -781,6 +781,8 @@ const es: Record<string, string> = {
   'action.PROJECT_FILE_DELETED': 'Archivo eliminado',
   'action.PROJECT_FILE_RENAMED': 'Archivo renombrado',
   'users.ssoHint': 'Cuenta de inicio de sesión único (Keycloak): la contraseña se gestiona en el proveedor de identidad.',
+  'dashboard.storage': 'Almacenamiento',
+  'dashboard.storageHint': 'la deduplicación ahorra {pct}%',
 };
 
 export default es;

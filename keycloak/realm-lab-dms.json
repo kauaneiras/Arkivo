@@ -6,10 +6,22 @@
   "registrationAllowed": false,
   "roles": {
     "realm": [
-      { "name": "dms-admin", "description": "Administrador do Lab DMS (ROLE_ADMIN)" },
-      { "name": "dms-editor", "description": "Editor: cria e edita documentos (ROLE_EDITOR)" },
-      { "name": "dms-reviewer", "description": "Revisor: aprova ou devolve (ROLE_REVIEWER)" },
-      { "name": "dms-viewer", "description": "Leitor (ROLE_VIEWER)" }
+      {
+        "name": "dms-admin",
+        "description": "Administrador do Lab DMS (ROLE_ADMIN)"
+      },
+      {
+        "name": "dms-editor",
+        "description": "Editor: cria e edita documentos (ROLE_EDITOR)"
+      },
+      {
+        "name": "dms-reviewer",
+        "description": "Revisor: aprova ou devolve (ROLE_REVIEWER)"
+      },
+      {
+        "name": "dms-viewer",
+        "description": "Leitor (ROLE_VIEWER)"
+      }
     ]
   },
   "clients": [
@@ -25,14 +37,40 @@
       "serviceAccountsEnabled": false,
       "rootUrl": "http://localhost:3000",
       "baseUrl": "/",
-      "redirectUris": ["http://localhost:3000/*", "http://localhost:5173/*"],
-      "webOrigins": ["http://localhost:3000", "http://localhost:5173"],
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost:5173/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "http://localhost:5173"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://localhost:3000/*##http://localhost:5173/*"
       },
-      "defaultClientScopes": ["openid", "profile", "email", "roles"],
-      "optionalClientScopes": []
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "groups",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "users": [
@@ -43,8 +81,20 @@
       "lastName": "SSO",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "123456", "temporary": false }],
-      "realmRoles": ["dms-admin"]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "123456",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "dms-admin"
+      ],
+      "groups": [
+        "/Administração",
+        "/Qualidade"
+      ]
     },
     {
       "username": "writer.sso@email.com",
@@ -53,8 +103,19 @@
       "lastName": "SSO",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "123456", "temporary": false }],
-      "realmRoles": ["dms-editor"]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "123456",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "dms-editor"
+      ],
+      "groups": [
+        "/Soldagem"
+      ]
     },
     {
       "username": "reviewer.sso@email.com",
@@ -63,8 +124,33 @@
       "lastName": "SSO",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "123456", "temporary": false }],
-      "realmRoles": ["dms-reviewer"]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "123456",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "dms-reviewer"
+      ],
+      "groups": [
+        "/Qualidade"
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "name": "Qualidade",
+      "path": "/Qualidade"
+    },
+    {
+      "name": "Soldagem",
+      "path": "/Soldagem"
+    },
+    {
+      "name": "Administração",
+      "path": "/Administração"
     }
   ]
 }

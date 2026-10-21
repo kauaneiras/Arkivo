@@ -41,6 +41,7 @@ docker compose --profile sso up -d
 | Realm | `lab-dms` |
 | Cliente | `lab-dms` (público, PKCE S256) |
 | Usuários de teste | `admin.sso@email.com`, `writer.sso@email.com`, `reviewer.sso@email.com`, senha `123456` |
+| Grupos | `Qualidade`, `Soldagem`, `Administração` — os mesmos nomes dos setores semeados, para o espelhamento funcionar de imediato |
 
 E no `.env`: `SSO_ISSUER_URI=http://localhost:8180/realms/lab-dms`.
 
@@ -77,6 +78,14 @@ E no `.env`: `SSO_ISSUER_URI=http://localhost:8180/realms/lab-dms`.
 4. O token precisa trazer os papéis em `realm_access.roles` (padrão do
    Keycloak). Se o seu realm os põe noutro sítio — por exemplo em
    `resource_access.lab-dms.roles` — ajuste `SSO_ROLES_CLAIM`.
+5. **Grupos → setores** (opcional). Crie no cliente `lab-dms` um *mapper* do
+   tipo *Group Membership* com *Token Claim Name* `groups` e *Full group path*
+   desligado. Um grupo do Keycloak com o mesmo nome de um setor do Lab DMS
+   (`Qualidade`, `Soldagem`…) passa a controlar a pertença a esse setor: a cada
+   entrada, os setores da pessoa ficam iguais à lista do token. Nomes
+   diferentes mapeiam-se em `labdms.sso.group-mapping`. Sem o mapper, o token
+   não traz a claim e os setores continuam a ser geridos à mão em
+   *Configurações → Setores* — nada é apagado.
 
 ---
 
@@ -122,6 +131,8 @@ alguém que deixa um computador de bancada espera de "Sair".
 | `SSO_SYNC_ROLES` | `true` | O Keycloak manda nos papéis a cada entrada. Com `false`, só na criação. |
 | `SSO_AUTO_PROVISION` | `true` | Cria a conta na primeira entrada. Com `false`, só entra quem já tiver conta ligada. |
 | `SSO_DEFAULT_ROLES` | `ROLE_VIEWER` | Para tokens sem papel mapeado. |
+| `SSO_GROUPS_CLAIM` | `groups` | Claim com os grupos do provedor (precisa do mapper acima). |
+| `SSO_SYNC_GROUPS` | `true` | Espelha grupos em setores a cada entrada, quando o token traz a claim. |
 
 ---
 
@@ -140,14 +151,16 @@ alguém que deixa um computador de bancada espera de "Sair".
 
 ---
 
+## Renovação do token
+
+O *access token* do Keycloak dura minutos (5, por omissão). O navegador guarda
+o *refresh token* da sessão e renova o acesso sozinho: um minuto antes de
+expirar, e também quando um pedido volta com 401. Quem está a meio de uma
+edição não vê a tela de login; só quando a própria sessão do Keycloak termina.
+Os pedidos concorrentes partilham uma única renovação, porque o Keycloak roda
+o *refresh token* a cada uso.
+
 ## O que ainda não faz
 
-- **Renovação silenciosa do token.** Quando o *access token* expira (padrão do
-  Keycloak: 5 min — vale subir para a duração de uma sessão de trabalho no
-  cliente `lab-dms`), o sistema volta ao login. Usar o *refresh token* no
-  navegador é a próxima peça.
-- **Grupos do Keycloak → setores do Lab DMS.** Hoje só os papéis são
-  sincronizados; a pertença a setores continua a ser gerida em *Configurações →
-  Setores*. Mapear grupos é uma extensão natural de `SsoTokenAuthenticator`.
 - **Logout iniciado pelo Keycloak** (*back-channel logout*). Sem estado de
   sessão no servidor, não há o que invalidar; os tokens são curtos por isso.

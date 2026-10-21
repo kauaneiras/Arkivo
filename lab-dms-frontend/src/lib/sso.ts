@@ -28,6 +28,7 @@ const KEY_STATE = 'labdms.sso.state';
 const KEY_CONFIG = 'labdms.sso.config';
 const KEY_ID_TOKEN = 'labdms.sso.idToken';
 const KEY_PROVIDER = 'labdms.sso.provider';
+const KEY_REFRESH = 'labdms.sso.refresh';
 
 export async function fetchAuthConfig(): Promise<AuthConfig> {
   const res = await api.get('/auth/config');
@@ -120,8 +121,48 @@ export async function finishSsoLogin(search: string): Promise<{ accessToken: str
   }
   const tokens = await res.json();
   if (tokens.id_token) sessionStorage.setItem(KEY_ID_TOKEN, tokens.id_token);
+  if (tokens.refresh_token) sessionStorage.setItem(KEY_REFRESH, tokens.refresh_token);
   localStorage.setItem(KEY_PROVIDER, 'KEYCLOAK');
   return { accessToken: tokens.access_token };
+}
+
+/**
+ * Trades the refresh token for a new access token, silently.
+ *
+ * The access token lives minutes; the refresh token lives as long as the
+ * Keycloak session. Renewing in the background is what keeps someone who is
+ * editing a long document from being thrown to the login page mid-sentence.
+ * The new refresh token replaces the old one (Keycloak rotates them).
+ *
+ * @return the new access token, or null when the session is gone for good
+ */
+export async function refreshSsoToken(): Promise<string | null> {
+  const refresh = sessionStorage.getItem(KEY_REFRESH);
+  const raw = sessionStorage.getItem(KEY_CONFIG);
+  if (!refresh || !raw) return null;
+  const cfg: AuthConfig = JSON.parse(raw);
+  if (!cfg.tokenEndpoint || !cfg.clientId) return null;
+  try {
+    const res = await fetch(cfg.tokenEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'refresh_token', client_id: cfg.clientId, refresh_token: refresh }),
+    });
+    if (!res.ok) {
+      sessionStorage.removeItem(KEY_REFRESH);
+      return null;
+    }
+    const tokens = await res.json();
+    if (tokens.refresh_token) sessionStorage.setItem(KEY_REFRESH, tokens.refresh_token);
+    if (tokens.id_token) sessionStorage.setItem(KEY_ID_TOKEN, tokens.id_token);
+    if (tokens.access_token) {
+      localStorage.setItem('jwt_token', tokens.access_token);
+      return tokens.access_token;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export function isSsoSession() {
@@ -140,6 +181,7 @@ export function ssoLogoutRedirect(): boolean {
   const idToken = sessionStorage.getItem(KEY_ID_TOKEN);
   localStorage.removeItem(KEY_PROVIDER);
   sessionStorage.removeItem(KEY_ID_TOKEN);
+  sessionStorage.removeItem(KEY_REFRESH);
   if (!cfg?.logoutEndpoint) return false;
   const params = new URLSearchParams({ post_logout_redirect_uri: `${window.location.origin}/login` });
   if (cfg.clientId) params.append('client_id', cfg.clientId);

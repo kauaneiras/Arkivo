@@ -63,6 +63,11 @@ labdms:
     sync-roles: ${SSO_SYNC_ROLES:true}
     auto-provision: ${SSO_AUTO_PROVISION:true}
     default-roles: ${SSO_DEFAULT_ROLES:ROLE_VIEWER}
+    # Provider groups -> document sectors (needs a "group membership" mapper on
+    # the client; see KEYCLOAK.md). Matched by name; this map overrides it.
+    groups-claim: ${SSO_GROUPS_CLAIM:groups}
+    sync-groups: ${SSO_SYNC_GROUPS:true}
+    group-mapping: {}
     # Provider role -> local role. Roles already named ROLE_* map to themselves.
     role-mapping:
       dms-admin: ROLE_ADMIN

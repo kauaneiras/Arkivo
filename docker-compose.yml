@@ -58,6 +58,8 @@ services:
       - SSO_SYNC_ROLES=${SSO_SYNC_ROLES:-true}
       - SSO_AUTO_PROVISION=${SSO_AUTO_PROVISION:-true}
       - SSO_DEFAULT_ROLES=${SSO_DEFAULT_ROLES:-ROLE_VIEWER}
+      - SSO_GROUPS_CLAIM=${SSO_GROUPS_CLAIM:-groups}
+      - SSO_SYNC_GROUPS=${SSO_SYNC_GROUPS:-true}
       # Storage housekeeping
       - STORAGE_GC_GRACE_HOURS=${STORAGE_GC_GRACE_HOURS:-24}
     volumes:

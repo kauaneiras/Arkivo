@@ -104,7 +104,60 @@ public class SsoTokenAuthenticator {
         UUID userId = findOrProvision(subject, email.toLowerCase(), name, localRoles);
         if (userId == null) return null;
 
+        if (props.isSyncGroups()) {
+            syncSectors(userId, claimList(jwt, props.getGroupsClaim()));
+        }
+
         return (UserPrincipal) userDetailsService.loadUserById(userId.toString());
+    }
+
+    /**
+     * Mirrors the provider's groups into the document sectors.
+     *
+     * <p>Only runs when the token CARRIES the claim: a realm without the group
+     * mapper must not wipe memberships that were set by hand. Group paths
+     * ("/Laboratório/Qualidade") match a sector by their last segment, case-
+     * insensitively, or through the explicit mapping. Membership becomes
+     * exactly the token's list — leaving a group in Keycloak takes effect at
+     * the next sign-in, which is the point of syncing.
+     */
+    void syncSectors(UUID userId, List<String> providerGroups) {
+        if (providerGroups == null) return;
+        Set<UUID> sectors = new LinkedHashSet<>();
+        for (String g : providerGroups) {
+            String leaf = g.contains("/") ? g.substring(g.lastIndexOf('/') + 1) : g;
+            String mapped = props.getGroupMapping().getOrDefault(g, props.getGroupMapping().getOrDefault(leaf, leaf));
+            List<UUID> ids = jdbcTemplate.queryForList(
+                    "SELECT id FROM document_groups WHERE LOWER(name) = LOWER(?)", UUID.class, mapped);
+            if (ids.isEmpty()) {
+                logger.info("SSO group '{}' has no matching sector; ignored", g);
+            } else {
+                sectors.add(ids.get(0));
+            }
+        }
+        jdbcTemplate.update("DELETE FROM document_group_members WHERE user_id = ?", userId);
+        for (UUID sector : sectors) {
+            jdbcTemplate.update("""
+                    INSERT INTO document_group_members (group_id, user_id, added_at, added_by)
+                    VALUES (?, ?, NOW(), NULL) ON CONFLICT DO NOTHING
+                    """, sector, userId);
+        }
+    }
+
+    /** The string array at a dotted claim path, or null when the claim is absent. */
+    private List<String> claimList(Jwt jwt, String path) {
+        if (path == null || path.isBlank()) return null;
+        Object node = jwt.getClaims();
+        for (String part : path.split("\\.")) {
+            if (!(node instanceof Map<?, ?> map) || !map.containsKey(part)) return null;
+            node = map.get(part);
+        }
+        if (node instanceof List<?> list) {
+            List<String> out = new ArrayList<>();
+            for (Object o : list) if (o != null) out.add(String.valueOf(o));
+            return out;
+        }
+        return null;
     }
 
     /* ------------------------------------------------------------------ */
@@ -136,19 +189,9 @@ public class SsoTokenAuthenticator {
     }
 
     /** The roles array at the configured dotted path, e.g. realm_access.roles. */
-    @SuppressWarnings("unchecked")
     private List<String> rolesIn(Jwt jwt) {
-        Object node = jwt.getClaims();
-        for (String part : props.getRolesClaim().split("\\.")) {
-            if (!(node instanceof Map<?, ?> map)) return List.of();
-            node = map.get(part);
-        }
-        if (node instanceof List<?> list) {
-            List<String> out = new ArrayList<>();
-            for (Object o : list) if (o != null) out.add(String.valueOf(o));
-            return out;
-        }
-        return List.of();
+        List<String> roles = claimList(jwt, props.getRolesClaim());
+        return roles == null ? List.of() : roles;
     }
 
     /** Provider roles → local roles, through the configured mapping. */

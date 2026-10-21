@@ -54,6 +54,22 @@ public class SsoProperties {
     private String nameClaim = "name";
     /** Where the browser is sent after signing out of the provider (optional). */
     private String postLogoutRedirectUri;
+    /**
+     * Claim holding the provider's groups (a "group membership" mapper in
+     * Keycloak puts them in {@code groups}, as "/Qualidade" paths).
+     */
+    private String groupsClaim = "groups";
+    /** Mirror provider groups into the document sectors on every sign-in. */
+    private boolean syncGroups = true;
+    /** Provider group → sector name; a group with the same name as a sector maps by itself. */
+    private Map<String, String> groupMapping = new LinkedHashMap<>();
+
+    public String getGroupsClaim() { return groupsClaim; }
+    public void setGroupsClaim(String groupsClaim) { this.groupsClaim = groupsClaim; }
+    public boolean isSyncGroups() { return syncGroups; }
+    public void setSyncGroups(boolean syncGroups) { this.syncGroups = syncGroups; }
+    public Map<String, String> getGroupMapping() { return groupMapping; }
+    public void setGroupMapping(Map<String, String> groupMapping) { this.groupMapping = groupMapping; }
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }

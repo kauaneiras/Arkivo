@@ -770,6 +770,8 @@ const en: Record<string, string> = {
   'action.PROJECT_FILE_DELETED': 'File removed',
   'action.PROJECT_FILE_RENAMED': 'File renamed',
   'users.ssoHint': 'Single sign-on account (Keycloak): the password is managed by the identity provider.',
+  'dashboard.storage': 'Storage',
+  'dashboard.storageHint': 'deduplication saves {pct}%',
 };
 
 export default en;
