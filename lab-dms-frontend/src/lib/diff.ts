@@ -1,4 +1,5 @@
-/* Minimal line-based diff (LCS) used to compare document versions. */
+/* Minimal line-based diff (LCS) used by the screen when the server is not
+   involved, plus the intra-line highlighter used by the diff viewer. */
 
 export interface DiffLine {
   kind: 'same' | 'added' | 'removed';
@@ -73,4 +74,31 @@ export function collapseDiff(lines: DiffLine[], context = 3): (DiffLine | { kind
   });
   if (skipped > 0) out.push({ kind: 'skip', count: skipped });
   return out;
+}
+
+/**
+ * The changed span of a removed/added line pair, as [start, end) on each side.
+ *
+ * Common prefix and suffix are trimmed; what is left is the part that actually
+ * changed. This is what GitHub highlights inside a modified line, and it is
+ * what makes "corrigido de 0,5 para 0,05" visible at a glance instead of
+ * requiring the reader to compare two nearly identical lines character by
+ * character. Falls back to the whole line when the two have little in common.
+ */
+export function highlightPair(before: string, after: string): [[number, number], [number, number]] {
+  const max = Math.min(before.length, after.length);
+  let prefix = 0;
+  while (prefix < max && before[prefix] === after[prefix]) prefix++;
+  let suffix = 0;
+  while (suffix < max - prefix
+    && before[before.length - 1 - suffix] === after[after.length - 1 - suffix]) suffix++;
+
+  const b: [number, number] = [prefix, before.length - suffix];
+  const a: [number, number] = [prefix, after.length - suffix];
+  // Little in common: highlighting almost everything is noise, so highlight nothing.
+  const common = prefix + suffix;
+  if (common < Math.max(before.length, after.length) * 0.3) {
+    return [[0, 0], [0, 0]];
+  }
+  return [b, a];
 }

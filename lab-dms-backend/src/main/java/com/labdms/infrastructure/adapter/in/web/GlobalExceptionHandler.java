@@ -37,13 +37,65 @@ public class GlobalExceptionHandler {
                         "Forbidden LaTeX construct: " + ex.getDetail()));
     }
 
+    /**
+     * Rule violations of the versioning and review workflow, said in words.
+     *
+     * <p>A {@code DomainException} carries a key. Sent as-is, the screen showed
+     * "commit.nothing.to.save" to a laboratory technician. Each key maps to a
+     * sentence that names the rule and what to do about it; an unmapped key
+     * still falls through as itself so a new rule is never silently hidden.
+     */
+    private static final Map<String, String> DOMAIN_MESSAGES = Map.ofEntries(
+            Map.entry("commit.nothing.to.save",
+                    "Não há alterações para gravar: tudo já está na última versão."),
+            Map.entry("commit.no.root.content",
+                    "O arquivo principal (raiz) está vazio ou não existe. Escolha um arquivo .tex como raiz antes de gravar."),
+            Map.entry("draft.none",
+                    "Não há alterações em andamento para descartar."),
+            Map.entry("draft.cannot.discard.initial",
+                    "Este rascunho é a única versão do documento e não pode ser descartado."),
+            Map.entry("restore.draft",
+                    "Alterações em andamento não são uma versão: grave-as ou descarte-as."),
+            Map.entry("review.already.open",
+                    "Este documento já tem um pedido de revisão aberto. Aguarde a decisão ou retire o pedido."),
+            Map.entry("review.unsaved.changes",
+                    "Há alterações em andamento que ainda não foram gravadas como versão. Grave a versão antes de submeter."),
+            Map.entry("review.nothing.changed",
+                    "A versão atual já é a que está em vigor. Não há nada novo para aprovar."),
+            Map.entry("review.no.version",
+                    "Este documento ainda não tem nenhuma versão gravada."),
+            Map.entry("review.document.obsolete",
+                    "Um documento obsoleto não pode ser submetido a revisão."),
+            Map.entry("review.already.decided",
+                    "Este pedido de revisão já foi decidido."),
+            Map.entry("review.rejection.needs.comment",
+                    "Para devolver um documento é preciso dizer o que deve ser corrigido."),
+            Map.entry("merge.requires.approved.review",
+                    "Um ramo só pode ser integrado depois de uma revisão aprovada."),
+            Map.entry("branch.default.not.found",
+                    "Este documento não tem um ramo principal."),
+            Map.entry("commit.not.found", "Versão não encontrada."),
+            Map.entry("pdf.not.found", "Esta versão ainda não foi compilada."),
+            Map.entry("content.snapshot.not.found", "O conteúdo desta versão não foi encontrado.")
+    );
+
     @ExceptionHandler(DomainException.class)
     public ResponseEntity<ErrorResponse> handleDomainException(DomainException ex) {
         logger.warn("Domain exception: {}", ex.getMessage());
-        // For a full implementation, we'd map exception types to specific i18n keys
-        // and fetch translated messages using messageSource.getMessage(...)
-        ErrorResponse error = new ErrorResponse("BAD_REQUEST", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        String message = DOMAIN_MESSAGES.getOrDefault(ex.getMessageKey(), ex.getMessage());
+        HttpStatus status = ex.getMessageKey() != null && ex.getMessageKey().endsWith(".not.found")
+                ? HttpStatus.NOT_FOUND
+                : ex.getMessageKey() != null && (ex.getMessageKey().startsWith("review.") || ex.getMessageKey().startsWith("draft."))
+                        ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST;
+        return ResponseEntity.status(status).body(new ErrorResponse(status.name(), message));
+    }
+
+    /** A locked account, from Spring's authentication provider. */
+    @ExceptionHandler(org.springframework.security.authentication.LockedException.class)
+    public ResponseEntity<ErrorResponse> handleLocked(Exception ex) {
+        logger.warn("Sign-in attempt on a locked account: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse("ACCOUNT_LOCKED", "Esta conta está bloqueada. Fale com um administrador."));
     }
 
     /**
@@ -243,6 +295,29 @@ public class GlobalExceptionHandler {
             if (m.group(g) != null) return m.group(g);
         }
         return null;
+    }
+
+    /**
+     * A {@code @PreAuthorize} refusal is a 403, not a 500.
+     *
+     * <p>Method security throws {@code AccessDeniedException} from inside the
+     * controller call, where the catch-all handler below caught it first and
+     * answered "Internal server error". Every admin-only endpoint — users,
+     * sectors, branding, storage — told an ordinary user the server was broken
+     * instead of that the action was not theirs to take.
+     */
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(org.springframework.security.access.AccessDeniedException ex) {
+        logger.warn("Access refused by method security: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse("FORBIDDEN",
+                        "Você não tem permissão para esta ação. Ela exige um papel que a sua conta não tem."));
+    }
+
+    @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthentication(org.springframework.security.core.AuthenticationException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ErrorResponse("UNAUTHORIZED", "Sessão inválida ou expirada. Entre de novo."));
     }
 
     @ExceptionHandler(Exception.class)

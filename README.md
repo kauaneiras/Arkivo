@@ -33,6 +33,11 @@ arquivo mais recente".
 - [Backup e restauração](#backup-e-restauração)
 - [Segurança](#segurança)
 
+Guias por assunto: [VERSIONAMENTO.md](VERSIONAMENTO.md) (rascunho, versões,
+comparação), [ATUALIZAR-DO-OVERLEAF.md](ATUALIZAR-DO-OVERLEAF.md),
+[KEYCLOAK.md](KEYCLOAK.md), [ACESSOS.md](ACESSOS.md),
+[BANCO-DE-DADOS.md](BANCO-DE-DADOS.md), [MELHORIAS-FUTURAS.md](MELHORIAS-FUTURAS.md).
+
 ---
 
 ## Começar em 3 minutos
@@ -78,9 +83,14 @@ Um roteiro de teste do fluxo completo está em [ACESSOS.md](ACESSOS.md).
 
 ### Versões que não se perdem
 
-Cada gravação cria uma versão completa e imutável, com autor, data, mensagem e
-**motivo da alteração**. O histórico mostra a comparação com a versão anterior,
-linha a linha.
+O modelo é o do Git, visto pela lente do GitHub Desktop. Editar escreve numa
+**área de trabalho** (o rascunho, salvo automaticamente); **salvar versão**
+fecha-a com autor, data, mensagem e **motivo da alteração**, e a partir daí
+ela é imutável. A tela *Alterações em andamento* lista o que o rascunho muda
+(arquivo a arquivo, `+n −m`) e tem a caixa de gravação; o *Histórico* mostra
+v1…vN e compara qualquer versão com a anterior ou com a vigente — lista de
+arquivos à esquerda, diff com números de linha à direita, unificado ou lado a
+lado. O modelo está explicado em [VERSIONAMENTO.md](VERSIONAMENTO.md).
 
 Restaurar uma versão antiga **não apaga nada**: cria uma nova versão com o
 conteúdo da escolhida. O histórico continua contando a verdade sobre o que
@@ -92,8 +102,9 @@ nem a v3 nem a v4.
 
 ### Aprovação com responsável nomeado
 
-Um documento vai para revisão, um revisor designado aprova ou rejeita, e só
-então entra em vigor. **Ninguém aprova o próprio documento** — a regra é do
+Um documento vai para revisão **numa versão exata** (o pedido guarda qual), um
+revisor designado vê o diff contra a vigente dentro do diálogo de decisão, e
+aprovar torna essa versão a vigente — sem passo manual depois. **Ninguém aprova o próprio documento** — a regra é do
 sistema, não do combinado da equipe, e vale mesmo para quem tem os dois papéis.
 
 ### Marca d'água em quem não está em vigor
@@ -118,7 +129,11 @@ avisa quando a data se aproxima e registra a revisão mesmo quando a conclusão 
 - **Lista mestra** exportável em CSV para entregar a um avaliador
 - **Anexos** por documento (planilhas, evidências, fotos)
 - **Notificações** internas de revisões pendentes e prazos
-- **Português e inglês**, tema claro, escuro ou seguindo o sistema
+- **Login único (SSO)** opcional com Keycloak, com criação automática de
+  contas e papéis sincronizados — [KEYCLOAK.md](KEYCLOAK.md)
+- **Consumo de armazenamento** em Configurações: tamanho do banco por tabela,
+  bytes por documento, economia da desduplicação e coletor de blobs órfãos
+- **Seis idiomas**, tema claro, escuro ou seguindo o sistema
 
 ---
 
@@ -185,8 +200,8 @@ A direção da dependência aponta sempre para dentro: o domínio não sabe que
 existe um banco de dados. Trocar PostgreSQL por outra coisa é escrever um
 adaptador novo, não reescrever as regras.
 
-**Números:** 23 controladores REST, 10 serviços de aplicação, 12 migrações
-Flyway, 10 telas.
+**Números:** 24 controladores REST, 12 serviços de aplicação, 16 migrações
+Flyway, 11 telas.
 
 ---
 
@@ -220,6 +235,9 @@ Armazenamento endereçado por conteúdo (SHA-256), híbrido:
 - **Deduplicação por hash**: arquivos iguais, em qualquer versão, ocupam espaço
   uma vez
 - **Uma nova versão copia as referências, não os bytes**
+- **Blobs sem referência** (de arquivos apagados, ZIPs substituídos, rascunhos
+  descartados) são recolhidos à noite, com carência de 24 h; a tela de
+  armazenamento mostra quantos há e permite limpar na hora
 
 Medido com uma tese real de 42 arquivos: **6 versões ocupam 1,47 MB** em vez dos
 11,73 MB que uma cópia integral custaria — 87% de economia.
@@ -310,6 +328,13 @@ FRONTEND_URL=http://localhost:5173
 cd lab-dms-backend && mvn test
 ```
 
+Além dos testes unitários, `VersioningFlowIntegrationTest` sobe a aplicação
+num **PostgreSQL embutido** (baixado uma vez pelo Maven), aplica as 16
+migrações e percorre por HTTP o ciclo inteiro: criar → editar (rascunho) →
+salvar versão → comparar → importar ZIP → submeter → aprovar → restaurar →
+armazenamento. Não precisa de Docker, Redis nem LaTeX. Uma consulta SQL que só
+quebra no Postgres quebra o build.
+
 A construção da imagem Docker também roda os testes (`RUN mvn package` no
 Dockerfile), então uma regressão quebra o build em vez de subir em silêncio.
 
@@ -339,6 +364,8 @@ Tudo vem do `.env` (veja o `.env.example`).
 | `LATEX_TIMEOUT_SECONDS` | 60 | Tempo máximo por compilação |
 | `LATEX_MAX_MEMORY` | 512m | Memória por compilação |
 | `MAX_FILE_SIZE` | 50MB | Limite de upload |
+| `SSO_ENABLED`, `SSO_ISSUER_URI`, `SSO_CLIENT_ID` | — | Login único com Keycloak ([KEYCLOAK.md](KEYCLOAK.md)) |
+| `STORAGE_GC_GRACE_HOURS` | 24 | Idade mínima de um blob órfão para ser recolhido |
 
 > `VITE_API_URL` entra na imagem no momento da construção, não na execução —
 > mudar exige `docker compose up -d --build`.
@@ -367,7 +394,10 @@ docker run --rm -v lab-dms_attachments:/data -v ${PWD}:/backup alpine `
 
 ## Segurança
 
-- **Autenticação** JWT, com limitação de tentativas de login via Redis
+- **Autenticação** JWT local, com limitação de tentativas de login via Redis;
+  ou OpenID Connect (Keycloak), validando o token contra as chaves do provedor
+- **Contas pendentes, desativadas ou bloqueadas não entram** — nem com senha
+  certa, nem com um token emitido antes da desativação
 - **Autorização** por papel e por documento, decidida num único ponto do código
 - **Múltiplos papéis** por usuário, com autorrevisão bloqueada mesmo assim
 - **Senhas** com BCrypt

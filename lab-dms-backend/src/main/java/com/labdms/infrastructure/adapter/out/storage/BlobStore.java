@@ -92,8 +92,9 @@ public class BlobStore {
         if (isText) {
             jdbcTemplate.update("""
                     INSERT INTO file_blobs (sha256, size_bytes, content_text, compression,
-                                            stored_bytes, content_type, is_text, ref_count)
-                    VALUES (?, ?, ?, 'NONE', ?, ?, true, 0)
+                                            stored_bytes, content_type, is_text)
+                    VALUES (?, ?, ?, 'NONE', ?, ?, true)
+                    ON CONFLICT (sha256) DO NOTHING
                     """, sha, content.length, new String(content, StandardCharsets.UTF_8),
                     content.length, contentType);
         } else {
@@ -116,10 +117,13 @@ public class BlobStore {
                 throw new IllegalStateException("Could not write the blob " + sha, e);
             }
 
+            // ON CONFLICT: two imports of the same figure at the same moment both
+            // pass the COUNT(*) above; the second INSERT must not abort an import.
             jdbcTemplate.update("""
                     INSERT INTO file_blobs (sha256, size_bytes, storage_path, compression,
-                                            stored_bytes, content_type, is_text, ref_count)
-                    VALUES (?, ?, ?, ?, ?, ?, false, 0)
+                                            stored_bytes, content_type, is_text)
+                    VALUES (?, ?, ?, ?, ?, ?, false)
+                    ON CONFLICT (sha256) DO NOTHING
                     """, sha, content.length, relative, compression, toWrite.length, contentType);
 
             if (worthCompressing) {
@@ -154,29 +158,90 @@ public class BlobStore {
     }
 
     /**
+     * Reads many TEXT blobs in one query.
+     *
+     * <p>Materialising a project for compilation, and diffing two trees, used
+     * to read blobs one by one: 43 round-trips for the 42-file reference
+     * project, on every preview. One {@code = ANY(?)} does it in one. Binary
+     * blobs are not included — they live on disk and are read individually.
+     *
+     * @return sha → bytes, only for the hashes that exist as text
+     */
+    public Map<String, byte[]> readTextBatch(List<String> shas) {
+        Map<String, byte[]> out = new java.util.HashMap<>();
+        if (shas == null || shas.isEmpty()) return out;
+        // Chunked so a 2 000-file project never builds a parameter array
+        // Postgres refuses.
+        for (int i = 0; i < shas.size(); i += 500) {
+            List<String> chunk = shas.subList(i, Math.min(shas.size(), i + 500));
+            jdbcTemplate.query(con -> {
+                var ps = con.prepareStatement(
+                        "SELECT sha256, content_text FROM file_blobs WHERE is_text AND sha256 = ANY(?)");
+                ps.setArray(1, con.createArrayOf("varchar", chunk.toArray()));
+                return ps;
+            }, rs -> {
+                out.put(rs.getString(1), rs.getString(2).getBytes(StandardCharsets.UTF_8));
+            });
+        }
+        return out;
+    }
+
+    /** One orphaned blob, as reported before collection. */
+    public record Orphan(String sha256, long sizeBytes, long storedBytes, boolean isText) {}
+
+    /**
+     * Blobs no commit references any more, older than the grace period.
+     *
+     * <p>The grace period is the whole point. An import stores its blobs
+     * before the rows that reference them exist, so a blob written one second
+     * ago is "unreferenced" and still about to be used. Only blobs older than
+     * the window are candidates, which makes the collector safe to run at any
+     * time without a global lock.
+     */
+    public List<Orphan> findOrphans(int graceHours) {
+        return jdbcTemplate.query("""
+                SELECT b.sha256, b.size_bytes, COALESCE(b.stored_bytes, b.size_bytes) AS stored, b.is_text
+                  FROM file_blobs b
+                 WHERE b.created_at < NOW() - make_interval(hours => ?)
+                   AND NOT EXISTS (SELECT 1 FROM project_files f WHERE f.blob_sha256 = b.sha256)
+                """, (rs, n) -> new Orphan(rs.getString(1), rs.getLong(2), rs.getLong(3), rs.getBoolean(4)),
+                graceHours);
+    }
+
+    /**
      * Deletes blobs no commit references any more.
      *
-     * <p>Runs on demand rather than on every delete: a blob usually becomes
-     * unreferenced only when an entire commit is removed, and an immediate
-     * delete would race with a concurrent commit that is about to reference the
-     * very same content.
+     * <p>Order matters: the ROW goes first, the FILE second. If a concurrent
+     * import references the blob between the two steps, the foreign key makes
+     * the DELETE fail and nothing is lost. The previous order — file first —
+     * could leave a row pointing at bytes that were already gone, which for a
+     * figure of an approved document is irrecoverable.
+     *
+     * @return number of blobs removed
      */
-    public int collectGarbage() {
-        List<Map<String, Object>> orphans = jdbcTemplate.queryForList("""
-                SELECT b.sha256, b.storage_path FROM file_blobs b
-                 WHERE NOT EXISTS (SELECT 1 FROM project_files f WHERE f.blob_sha256 = b.sha256)
-                """);
+    public int collectGarbage(int graceHours) {
         int removed = 0;
-        for (Map<String, Object> o : orphans) {
-            String path = (String) o.get("storage_path");
-            if (path != null) {
-                try {
-                    Files.deleteIfExists(resolve(path));
-                } catch (IOException e) {
-                    logger.warn("Could not delete the blob file {}", path);
+        for (Orphan o : findOrphans(graceHours)) {
+            int rows;
+            try {
+                rows = jdbcTemplate.update("""
+                        DELETE FROM file_blobs b WHERE b.sha256 = ?
+                           AND NOT EXISTS (SELECT 1 FROM project_files f WHERE f.blob_sha256 = b.sha256)
+                        """, o.sha256());
+            } catch (org.springframework.dao.DataIntegrityViolationException referencedMeanwhile) {
+                continue;   // a commit took it in the last instant; keep it
+            }
+            if (rows == 0) continue;
+            if (!o.isText()) {
+                String relative = o.sha256().substring(0, 2) + "/" + o.sha256().substring(2, 4) + "/" + o.sha256();
+                for (String candidate : List.of(relative + ".gz", relative)) {
+                    try {
+                        Files.deleteIfExists(resolve(candidate));
+                    } catch (IOException e) {
+                        logger.warn("Could not delete the blob file {}", candidate);
+                    }
                 }
             }
-            jdbcTemplate.update("DELETE FROM file_blobs WHERE sha256 = ?", o.get("sha256"));
             removed++;
         }
         if (removed > 0) logger.info("Blob garbage collection removed {} unreferenced blob(s)", removed);

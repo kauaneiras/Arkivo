@@ -17,7 +17,8 @@ public class UserJpaEntity {
     @Column(unique = true, nullable = false, length = 255)
     private String email;
 
-    @Column(name = "password_hash", nullable = false, length = 255)
+    // Null for an account that signs in through SSO (V16): it has no local password.
+    @Column(name = "password_hash", length = 255)
     private String passwordHash;
 
     @Column(name = "full_name", nullable = false, length = 255)

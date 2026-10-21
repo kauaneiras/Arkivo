@@ -38,7 +38,7 @@ public class SecurityConfig {
             .cors(cors -> cors.configure(http))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/v1/auth/**").permitAll()
+                .requestMatchers("/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/config").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/documents/public").permitAll()
                 // Documents the laboratory chose to publish. GET only, and the
                 // controller behind it serves nothing but the revision in force,

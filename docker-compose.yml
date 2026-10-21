@@ -49,6 +49,17 @@ services:
       - SPRING_PROFILES_ACTIVE=${SPRING_PROFILE:-dev}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
       - ATTACHMENTS_DIR=/app/attachments
+      # Single sign-on (optional). See KEYCLOAK.md.
+      - SSO_ENABLED=${SSO_ENABLED:-false}
+      - SSO_ISSUER_URI=${SSO_ISSUER_URI:-}
+      - SSO_CLIENT_ID=${SSO_CLIENT_ID:-lab-dms}
+      - SSO_AUDIENCE=${SSO_AUDIENCE:-}
+      - SSO_ROLES_CLAIM=${SSO_ROLES_CLAIM:-realm_access.roles}
+      - SSO_SYNC_ROLES=${SSO_SYNC_ROLES:-true}
+      - SSO_AUTO_PROVISION=${SSO_AUTO_PROVISION:-true}
+      - SSO_DEFAULT_ROLES=${SSO_DEFAULT_ROLES:-ROLE_VIEWER}
+      # Storage housekeeping
+      - STORAGE_GC_GRACE_HOURS=${STORAGE_GC_GRACE_HOURS:-24}
     volumes:
       - attachments:/app/attachments
     depends_on:
@@ -120,6 +131,34 @@ services:
     restart: "no"
     profiles:
       - docker-latex
+
+  # ============================================
+  # KEYCLOAK — OPTIONAL identity provider (profile "sso")
+  # ============================================
+  # A development realm is imported from keycloak/realm-lab-dms.json: realm
+  # "lab-dms", public client "lab-dms", roles dms-admin / dms-editor /
+  # dms-reviewer / dms-viewer. Production should point SSO_ISSUER_URI at the
+  # organisation's own Keycloak instead of running this one.
+  # Enable with: docker compose --profile sso up -d
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: lab-dms-keycloak
+    command: ["start-dev", "--import-realm", "--http-port=8180"]
+    environment:
+      - KC_BOOTSTRAP_ADMIN_USERNAME=${KEYCLOAK_ADMIN:-admin}
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      - KC_HOSTNAME=localhost
+      - KC_HOSTNAME_PORT=8180
+      - KC_HTTP_ENABLED=true
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+    ports:
+      - "${KEYCLOAK_PORT:-8180}:8180"
+    networks:
+      - lab-dms-network
+    profiles:
+      - sso
+    restart: unless-stopped
 
 # ============================================
 # VOLUMES

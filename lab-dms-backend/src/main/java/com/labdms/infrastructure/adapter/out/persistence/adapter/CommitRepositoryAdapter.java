@@ -65,7 +65,15 @@ public class CommitRepositoryAdapter implements CommitRepository {
 
     @Override
     public List<Commit> findByDocumentId(UUID documentId) {
-        return java.util.Collections.emptyList();
+        return repository.findByDocumentIdOrderByCreatedAtDesc(documentId).stream()
+                .map(mapper::toDomain)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public void delete(UUID id) {
+        repository.deleteById(id);
+        repository.flush();
     }
 
     @Override

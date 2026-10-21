@@ -13,6 +13,7 @@ interface UserDto {
   fullName: string;
   status: string;
   role?: string;
+  authProvider?: string;
 }
 
 interface RoleDto {
@@ -293,7 +294,12 @@ export default function UsersPage() {
                   pendingUsers.map((user) => (
                     <tr key={user.id} className="hover:bg-surface/50 transition-colors">
                       <td className="px-6 py-4 font-medium text-textMain">{user.fullName}</td>
-                      <td className="px-6 py-4 text-textMuted">{user.email}</td>
+                      <td className="px-6 py-4 text-textMuted">
+                        {user.email}
+                        {user.authProvider === 'KEYCLOAK' && (
+                          <span className="ml-2 text-[10px] font-semibold uppercase bg-blue-50 text-blue-700 border border-blue-200 rounded px-1.5 py-0.5" title={t('users.ssoHint')}>SSO</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4">
                         <select
                           className="input-field text-sm h-8 py-0 px-2 w-44"
@@ -371,7 +377,12 @@ export default function UsersPage() {
                       user.status === 'INACTIVE' && 'opacity-60',
                     )}>
                       <td className="px-6 py-4 font-medium text-textMain">{user.fullName}</td>
-                      <td className="px-6 py-4 text-textMuted">{user.email}</td>
+                      <td className="px-6 py-4 text-textMuted">
+                        {user.email}
+                        {user.authProvider === 'KEYCLOAK' && (
+                          <span className="ml-2 text-[10px] font-semibold uppercase bg-blue-50 text-blue-700 border border-blue-200 rounded px-1.5 py-0.5" title={t('users.ssoHint')}>SSO</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4">
                         <span className={cn(
                           'px-2.5 py-1 rounded-full text-xs font-medium border',

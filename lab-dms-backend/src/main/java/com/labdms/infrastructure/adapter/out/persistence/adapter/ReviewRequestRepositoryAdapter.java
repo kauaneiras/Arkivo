@@ -13,6 +13,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Review requests, read by indexed queries.
+ *
+ * <p>Every lookup used to be {@code findAll()} filtered in Java — the whole
+ * table on every "is there an open request for this document?" question.
+ */
 @Repository
 public class ReviewRequestRepositoryAdapter implements ReviewRequestRepository {
 
@@ -24,17 +30,21 @@ public class ReviewRequestRepositoryAdapter implements ReviewRequestRepository {
 
     @Override
     public ReviewRequest save(ReviewRequest reviewRequest) {
-        ReviewRequestJpaEntity entity = new ReviewRequestJpaEntity();
+        ReviewRequestJpaEntity entity = repository.findById(reviewRequest.getId())
+                .orElseGet(ReviewRequestJpaEntity::new);
         entity.setId(reviewRequest.getId());
         entity.setDocumentId(reviewRequest.getDocumentId());
         entity.setTitle(reviewRequest.getTitle());
         entity.setDescription(reviewRequest.getDescription());
         entity.setRequestedBy(reviewRequest.getRequestedBy());
         entity.setSourceBranchId(reviewRequest.getSourceBranchId());
-        entity.setTargetBranchId(reviewRequest.getSourceBranchId()); // dummy for now
+        entity.setTargetBranchId(reviewRequest.getSourceBranchId()); // single-branch workflow
+        entity.setCommitId(reviewRequest.getCommitId());
         entity.setStatus(reviewRequest.getStatus().name());
         entity.setCreatedAt(LocalDateTime.ofInstant(reviewRequest.getCreatedAt(), ZoneOffset.UTC));
-        entity.setResolvedAt(LocalDateTime.ofInstant(reviewRequest.getUpdatedAt(), ZoneOffset.UTC));
+        // resolved_at is the moment of the decision; an OPEN request has none.
+        entity.setResolvedAt(reviewRequest.getStatus() == ReviewRequestStatus.OPEN ? null
+                : LocalDateTime.ofInstant(reviewRequest.getUpdatedAt(), ZoneOffset.UTC));
         ReviewRequestJpaEntity saved = repository.save(entity);
         return toDomain(saved);
     }
@@ -46,22 +56,28 @@ public class ReviewRequestRepositoryAdapter implements ReviewRequestRepository {
 
     @Override
     public List<ReviewRequest> findByDocumentId(UUID documentId) {
-        return repository.findAll().stream().map(this::toDomain).filter(r -> r.getDocumentId().equals(documentId)).toList();
+        return repository.findByDocumentIdOrderByCreatedAtDesc(documentId).stream().map(this::toDomain).toList();
     }
 
     @Override
     public List<ReviewRequest> findByStatus(ReviewRequestStatus status) {
-        return repository.findAll().stream().map(this::toDomain).filter(r -> r.getStatus() == status).toList();
+        return repository.findByStatusOrderByCreatedAtDesc(status.name()).stream().map(this::toDomain).toList();
     }
 
     @Override
     public Optional<ReviewRequest> findBySourceBranchIdAndStatus(UUID sourceBranchId, ReviewRequestStatus status) {
-        return repository.findAll().stream().map(this::toDomain)
-            .filter(r -> r.getSourceBranchId().equals(sourceBranchId) && r.getStatus() == status).findFirst();
+        return repository.findFirstBySourceBranchIdAndStatusOrderByCreatedAtDesc(sourceBranchId, status.name())
+                .map(this::toDomain);
+    }
+
+    @Override
+    public Optional<ReviewRequest> findOpenByDocumentId(UUID documentId) {
+        return repository.findFirstByDocumentIdAndStatus(documentId, ReviewRequestStatus.OPEN.name())
+                .map(this::toDomain);
     }
 
     private ReviewRequest toDomain(ReviewRequestJpaEntity entity) {
-        return new ReviewRequest(
+        ReviewRequest rr = new ReviewRequest(
                 entity.getId(),
                 entity.getDocumentId(),
                 entity.getSourceBranchId(),
@@ -72,5 +88,7 @@ public class ReviewRequestRepositoryAdapter implements ReviewRequestRepository {
                 entity.getCreatedAt().toInstant(ZoneOffset.UTC),
                 entity.getResolvedAt() != null ? entity.getResolvedAt().toInstant(ZoneOffset.UTC) : entity.getCreatedAt().toInstant(ZoneOffset.UTC)
         );
+        rr.setCommitId(entity.getCommitId());
+        return rr;
     }
 }

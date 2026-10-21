@@ -10,7 +10,7 @@ public class CommitPersistenceMapper {
     public Commit toDomain(CommitJpaEntity entity) {
         if (entity == null) return null;
 
-        return new Commit(
+        Commit commit = new Commit(
             entity.getId(),
             entity.getDocumentId(),
             entity.getBranchId(),
@@ -21,6 +21,9 @@ public class CommitPersistenceMapper {
             entity.getAuthorId(),
             entity.getCreatedAt() != null ? entity.getCreatedAt().toInstant(java.time.ZoneOffset.UTC) : null
         );
+        commit.setDraft(entity.isDraft());
+        commit.setChangeReason(entity.getChangeReason());
+        return commit;
     }
 
     public CommitJpaEntity toJpaEntity(Commit domain) {
@@ -36,6 +39,8 @@ public class CommitPersistenceMapper {
         entity.setMessage(domain.getMessage());
         entity.setAuthorId(domain.getAuthorId());
         entity.setCreatedAt(domain.getCreatedAt() != null ? java.time.LocalDateTime.ofInstant(domain.getCreatedAt(), java.time.ZoneOffset.UTC) : null);
+        entity.setDraft(domain.isDraft());
+        entity.setChangeReason(domain.getChangeReason());
 
         return entity;
     }

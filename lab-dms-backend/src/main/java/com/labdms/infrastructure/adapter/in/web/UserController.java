@@ -114,7 +114,7 @@ public class UserController {
         // Roles are aggregated into one comma-separated value per user. Joining
         // user_roles directly would emit one ROW PER ROLE, so a user holding both
         // EDITOR and REVIEWER would appear twice in the list.
-        String sql = "SELECT u.id, u.email, u.full_name, u.status, " +
+        String sql = "SELECT u.id, u.email, u.full_name, u.status, u.auth_provider, " +
                      "(SELECT string_agg(r.name, ',' ORDER BY r.name) " +
                      "   FROM user_roles ur JOIN roles r ON r.id = ur.role_id " +
                      "  WHERE ur.user_id = u.id) AS role_name " +
@@ -131,7 +131,8 @@ public class UserController {
             rs.getString("email"),
             rs.getString("full_name"),
             rs.getString("status"),
-            rs.getString("role_name")
+            rs.getString("role_name"),
+            rs.getString("auth_provider")
         ), args);
 
         return ResponseEntity.ok(response);
@@ -424,7 +425,12 @@ public class UserController {
 
     public record StatusRequest(String status) {}
     public record LanguageRequest(String language) {}
-    public record UserDto(UUID id, String email, String fullName, String status, String role) {}
+    /** @param authProvider LOCAL or KEYCLOAK — tells the screen whether a password exists here. */
+    public record UserDto(UUID id, String email, String fullName, String status, String role, String authProvider) {
+        public UserDto(UUID id, String email, String fullName, String status, String role) {
+            this(id, email, fullName, status, role, "LOCAL");
+        }
+    }
     public record ApproveRequest(String roleName) {}
     public record UpdateRolesRequest(List<String> roleNames) {}
     public record RoleDto(UUID id, String name, String description) {}

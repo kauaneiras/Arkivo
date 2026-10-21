@@ -39,6 +39,9 @@ public class ProjectFileService {
     public record ProjectFile(UUID id, String path, String sha256, long sizeBytes,
                                boolean isText, String contentType, boolean isRoot, String derivedFrom) {}
 
+    /** Name given to the root file when a document's text is first written as a tree. */
+    public static final String DEFAULT_ROOT = "main.tex";
+
     /* --------------------------- reading the tree --------------------------- */
 
     @Transactional(readOnly = true)
@@ -119,6 +122,31 @@ public class ProjectFileService {
                 SELECT gen_random_uuid(), ?, path, blob_sha256, size_bytes, is_text, content_type, is_root, derived_from
                   FROM project_files WHERE commit_id = ?
                 """, toCommit, fromCommit);
+    }
+
+    /**
+     * Makes {@code toCommit}'s tree an exact copy of {@code fromCommit}'s.
+     *
+     * <p>Used by restore: the draft's current rows are dropped and the restored
+     * version's rows copied in, in one transaction, so the draft is never seen
+     * half-way between the two.
+     */
+    @Transactional
+    public void replaceTreeFromCommit(UUID toCommit, UUID fromCommit) {
+        jdbcTemplate.update("DELETE FROM project_files WHERE commit_id = ?", toCommit);
+        copyTree(fromCommit, toCommit);
+        invalidateCompiledPdf(toCommit);
+    }
+
+    /**
+     * Removes everything that hangs off a commit about to be deleted: its tree
+     * and its compiled PDF. Blobs stay — they are content-addressed and may be
+     * shared; the garbage collector reclaims the unreferenced ones later.
+     */
+    @Transactional
+    public void dropCommitArtifacts(UUID commitId) {
+        jdbcTemplate.update("DELETE FROM project_files WHERE commit_id = ?", commitId);
+        invalidateCompiledPdf(commitId);
     }
 
     /** Adds or replaces one path in a commit's tree. */
@@ -347,6 +375,11 @@ public class ProjectFileService {
                         .map(ProjectFile::path).findFirst()
                         .orElseThrow(() -> new IllegalStateException("No .tex file to compile")));
 
+        // One query for every text blob instead of one per file: on the
+        // reference project that is 1 round-trip instead of 35 per compilation.
+        Map<String, byte[]> texts = blobStore.readTextBatch(
+                files.stream().filter(ProjectFile::isText).map(ProjectFile::sha256).toList());
+
         for (ProjectFile f : files) {
             Path target = workDir.resolve(f.path()).normalize();
             // Defence in depth: the path was sanitised on the way in, but this
@@ -355,7 +388,8 @@ public class ProjectFileService {
                 throw new IOException("Invalid path in the tree: " + f.path());
             }
             Files.createDirectories(target.getParent());
-            Files.write(target, blobStore.read(f.sha256()));
+            byte[] bytes = f.isText() ? texts.get(f.sha256()) : null;
+            Files.write(target, bytes != null ? bytes : blobStore.read(f.sha256()));
         }
 
         logger.debug("Materialised {} files for commit {} (root: {})", files.size(), commitId, rootPath);

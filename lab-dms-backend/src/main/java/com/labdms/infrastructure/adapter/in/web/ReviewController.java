@@ -27,13 +27,25 @@ public class ReviewController {
     private final SubmitReviewUseCase submitReviewUseCase;
     private final ApproveReviewUseCase approveReviewUseCase;
     private final JdbcTemplate jdbcTemplate;
+    private final com.labdms.application.service.ReviewService reviewService;
 
     public ReviewController(SubmitReviewUseCase submitReviewUseCase,
                             ApproveReviewUseCase approveReviewUseCase,
-                            JdbcTemplate jdbcTemplate) {
+                            JdbcTemplate jdbcTemplate,
+                            com.labdms.application.service.ReviewService reviewService) {
         this.submitReviewUseCase = submitReviewUseCase;
         this.approveReviewUseCase = approveReviewUseCase;
         this.jdbcTemplate = jdbcTemplate;
+        this.reviewService = reviewService;
+    }
+
+    @PostMapping("/reviews/{reviewRequestId}/withdraw")
+    @Operation(summary = "Withdraw an open review request (author or editor of the document)")
+    public ResponseEntity<Void> withdraw(
+            @PathVariable UUID reviewRequestId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        reviewService.withdraw(principal.getId(), reviewRequestId);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/documents/{documentId}/reviews")
@@ -103,7 +115,18 @@ public class ReviewController {
             Instant createdAt,
             UUID documentCreatedBy,
             UUID assignedReviewerId,
-            UUID documentGroupId
+            UUID documentGroupId,
+            /** A versão proposta e a que está em vigor — o par que a revisão compara. */
+            UUID documentCurrentCommitId,
+            UUID documentOfficialCommitId,
+            /** A versão EXATA submetida (fixa no pedido), e a vigente quando foi submetida. */
+            UUID reviewedCommitId,
+            UUID baseCommitId,
+            /** Decisão, quando já houve uma. */
+            String decision,
+            String decisionComments,
+            String reviewerName,
+            Instant decidedAt
     ) {}
 
     @GetMapping("/reviews")
@@ -115,10 +138,16 @@ public class ReviewController {
         StringBuilder sql = new StringBuilder(
             "SELECT rr.id, rr.document_id, d.code AS document_code, d.title AS document_title, " +
             "rr.title, rr.description, rr.status, u.full_name AS requested_by_name, rr.created_at, " +
-            "d.created_by AS document_created_by, d.assigned_reviewer_id, d.document_group_id " +
+            "d.created_by AS document_created_by, d.assigned_reviewer_id, d.document_group_id, " +
+            "d.current_commit_id, d.official_commit_id, rr.commit_id AS reviewed_commit_id, " +
+            "(SELECT c.parent_commit_id FROM commits c WHERE c.id = rr.commit_id) AS base_commit_id, " +
+            "rv.decision, rv.comments AS decision_comments, ru.full_name AS reviewer_name, rv.created_at AS decided_at " +
             "FROM review_requests rr " +
             "JOIN documents d ON d.id = rr.document_id " +
-            "JOIN users u ON u.id = rr.requested_by "
+            "JOIN users u ON u.id = rr.requested_by " +
+            "LEFT JOIN LATERAL (SELECT r.decision, r.comments, r.reviewer_id, r.created_at FROM reviews r " +
+            "                   WHERE r.review_request_id = rr.id ORDER BY r.created_at DESC LIMIT 1) rv ON true " +
+            "LEFT JOIN users ru ON ru.id = rv.reviewer_id "
         );
 
         Object[] args;
@@ -142,7 +171,15 @@ public class ReviewController {
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getObject("document_created_by", UUID.class),
                 rs.getObject("assigned_reviewer_id", UUID.class),
-                rs.getObject("document_group_id", UUID.class)
+                rs.getObject("document_group_id", UUID.class),
+                rs.getObject("current_commit_id", UUID.class),
+                rs.getObject("official_commit_id", UUID.class),
+                rs.getObject("reviewed_commit_id", UUID.class),
+                rs.getObject("base_commit_id", UUID.class),
+                rs.getString("decision"),
+                rs.getString("decision_comments"),
+                rs.getString("reviewer_name"),
+                rs.getTimestamp("decided_at") == null ? null : rs.getTimestamp("decided_at").toInstant()
         ), args);
 
         return ResponseEntity.ok(reviews);
@@ -157,10 +194,16 @@ public class ReviewController {
         List<ReviewListItemDto> reviews = jdbcTemplate.query(
             "SELECT rr.id, rr.document_id, d.code AS document_code, d.title AS document_title, " +
             "rr.title, rr.description, rr.status, u.full_name AS requested_by_name, rr.created_at, " +
-            "d.created_by AS document_created_by, d.assigned_reviewer_id, d.document_group_id " +
+            "d.created_by AS document_created_by, d.assigned_reviewer_id, d.document_group_id, " +
+            "d.current_commit_id, d.official_commit_id, rr.commit_id AS reviewed_commit_id, " +
+            "(SELECT c.parent_commit_id FROM commits c WHERE c.id = rr.commit_id) AS base_commit_id, " +
+            "rv.decision, rv.comments AS decision_comments, ru.full_name AS reviewer_name, rv.created_at AS decided_at " +
             "FROM review_requests rr " +
             "JOIN documents d ON d.id = rr.document_id " +
             "JOIN users u ON u.id = rr.requested_by " +
+            "LEFT JOIN LATERAL (SELECT r.decision, r.comments, r.reviewer_id, r.created_at FROM reviews r " +
+            "                   WHERE r.review_request_id = rr.id ORDER BY r.created_at DESC LIMIT 1) rv ON true " +
+            "LEFT JOIN users ru ON ru.id = rv.reviewer_id " +
             "WHERE rr.document_id = ? ORDER BY rr.created_at DESC",
             (rs, rowNum) -> new ReviewListItemDto(
                 rs.getObject("id", UUID.class),
@@ -174,7 +217,15 @@ public class ReviewController {
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getObject("document_created_by", UUID.class),
                 rs.getObject("assigned_reviewer_id", UUID.class),
-                rs.getObject("document_group_id", UUID.class)
+                rs.getObject("document_group_id", UUID.class),
+                rs.getObject("current_commit_id", UUID.class),
+                rs.getObject("official_commit_id", UUID.class),
+                rs.getObject("reviewed_commit_id", UUID.class),
+                rs.getObject("base_commit_id", UUID.class),
+                rs.getString("decision"),
+                rs.getString("decision_comments"),
+                rs.getString("reviewer_name"),
+                rs.getTimestamp("decided_at") == null ? null : rs.getTimestamp("decided_at").toInstant()
             ),
             documentId
         );
