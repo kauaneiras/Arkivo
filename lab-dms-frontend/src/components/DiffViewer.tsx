@@ -76,6 +76,12 @@ interface Props {
   caption?: ReactNode;
   /** Called with the summary once loaded — lets a dialog adapt its buttons. */
   onLoaded?: (tree: TreeDiff) => void;
+  /**
+   * Show the "these files will cease to exist" warning. Only meaningful
+   * BEFORE something is applied (the ZIP preview); in the history a removal
+   * is a fact, not a decision.
+   */
+  warnOnRemoval?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -129,7 +135,7 @@ export function DiffStat({ additions, deletions, className }: { additions: numbe
  * a ZIP that has not been applied yet.
  */
 export default function DiffViewer({
-  documentId, from, to, precomputed, initialPath, height = '60vh', caption, onLoaded,
+  documentId, from, to, precomputed, initialPath, height = '60vh', caption, onLoaded, warnOnRemoval = false,
 }: Props) {
   const { t } = useI18n();
   const [tree, setTree] = useState<TreeDiff | null>(precomputed?.tree ?? null);
@@ -235,7 +241,7 @@ export default function DiffViewer({
         )}
       </div>
 
-      {tree.removed > 0 && (
+      {warnOnRemoval && tree.removed > 0 && (
         <p className="text-xs text-red-800 bg-red-50 border-b border-red-200 px-3 py-1.5 flex items-start gap-2">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <span>{t('diff.removalWarning')}</span>

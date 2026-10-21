@@ -68,6 +68,8 @@ public class GlobalExceptionHandler {
                     "Um documento obsoleto não pode ser submetido a revisão."),
             Map.entry("review.already.decided",
                     "Este pedido de revisão já foi decidido."),
+            Map.entry("review.withdraw.not.owner",
+                    "Só quem submeteu o pedido, o autor do documento ou um administrador pode retirá-lo."),
             Map.entry("review.rejection.needs.comment",
                     "Para devolver um documento é preciso dizer o que deve ser corrigido."),
             Map.entry("merge.requires.approved.review",
@@ -318,6 +320,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleAuthentication(org.springframework.security.core.AuthenticationException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ErrorResponse("UNAUTHORIZED", "Sessão inválida ou expirada. Entre de novo."));
+    }
+
+    /** A malformed path or query value (e.g. a non-UUID id) is the caller's error. */
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse("BAD_REQUEST", "Valor inválido para '" + ex.getName() + "'."));
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpMediaTypeNotAcceptableException.class)
+    public ResponseEntity<ErrorResponse> handleNotAcceptable(org.springframework.web.HttpMediaTypeNotAcceptableException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE)
+                .body(new ErrorResponse("NOT_ACCEPTABLE", "Formato de resposta não suportado para esta rota."));
     }
 
     @ExceptionHandler(Exception.class)

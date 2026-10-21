@@ -224,6 +224,13 @@ public class ReviewService implements SubmitReviewUseCase, ApproveReviewUseCase 
         Document document = documentRepository.findById(reviewRequest.getDocumentId())
                 .orElseThrow(() -> new DocumentNotFoundException(reviewRequest.getDocumentId()));
         accessControlService.assertCanEdit(userId, document);
+        // Withdrawing is the submitter's (or the author's) act. A colleague with
+        // edit rights on the sector must not be able to pull somebody else's
+        // request out from under the reviewer; an administrator still can.
+        boolean owner = userId.equals(reviewRequest.getRequestedBy()) || userId.equals(document.getCreatedBy());
+        if (!owner && !accessControlService.isAdmin(userId)) {
+            throw new DomainException("review.withdraw.not.owner");
+        }
 
         reviewRequest.reject();
         reviewRequestRepository.save(reviewRequest);

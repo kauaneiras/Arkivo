@@ -211,6 +211,11 @@ public class AccessControlService {
         }
     }
 
+    /** Holds every permission (DOCUMENT_EDIT_ALL is the administrator's mark). */
+    public boolean isAdmin(UUID userId) {
+        return userRepository.findUserPermissions(userId).contains("DOCUMENT_EDIT_ALL");
+    }
+
     private void assertUserActive(UUID userId) {
         User user = userRepository.findById(userId).orElse(null);
         if (user == null || !user.isActive()) {

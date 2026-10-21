@@ -32,6 +32,9 @@ Resolvido na revisão que introduziu o rascunho de trabalho (V16):
 - **Diff só do arquivo raiz** — a comparação é das árvores, arquivo a arquivo
   e linha a linha, com visualização estilo GitHub Desktop.
 - **Contas pendentes/desativadas entravam** — não entram.
+- **Recusas de `@PreAuthorize` saíam como 500** — agora 403.
+- **SSO**: renovação silenciosa do token e grupos do Keycloak espelhados nos
+  setores ([KEYCLOAK.md](KEYCLOAK.md)).
 
 ---
 
@@ -70,12 +73,6 @@ uma vez), nunca de um dump anterior à V9.
 ---
 
 ## Editor LaTeX
-
-### Renovação silenciosa do token de SSO — **média**
-
-Quando o *access token* do Keycloak expira, o sistema volta ao login (o
-Keycloak reentra sem pedir senha enquanto a sessão dele durar). Usar o *refresh
-token* no navegador evita a interrupção. Ver [KEYCLOAK.md](KEYCLOAK.md).
 
 ### Menu de contexto na árvore — **média**
 
@@ -127,11 +124,6 @@ o revisor já vê, é como uma revisão técnica costuma acontecer.
 ---
 
 ## Conformidade e processo
-
-### Grupos do Keycloak → setores — **média**
-
-O SSO sincroniza papéis, não setores. Mapear grupos do realm para
-`document_group_members` fecha o ciclo.
 
 ### Assinatura digital com certificado — **média**
 

@@ -702,6 +702,8 @@ export default function DocumentEditorPage() {
       lastCompiledRef.current = null;
       markDirty(false);
       setSaveState('idle');
+      // "Draft saved at 16:51" would be stale now: everything is a version.
+      setLastSavedAt(null);
       await fetchCommits();
       await fetchDocument();
       return true;
@@ -731,6 +733,7 @@ export default function DocumentEditorPage() {
       setDiscardOpen(false);
       isDirtyRef.current = false;
       setSaveState('idle');
+      setLastSavedAt(null);
       lastCompiledRef.current = null;
       await fetchCommits();
       await fetchDocument();
@@ -1695,6 +1698,7 @@ export default function DocumentEditorPage() {
             <DiffViewer
               documentId={id!}
               precomputed={{ tree: zipPendente.preview, files: zipPendente.files }}
+              warnOnRemoval
               height="48vh"
               caption={t('zip.previewCaption')}
             />

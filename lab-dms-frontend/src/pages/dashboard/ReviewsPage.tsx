@@ -18,6 +18,7 @@ interface ReviewItem {
   description: string | null;
   status: string;
   requestedByName: string;
+  requestedById?: string | null;
   createdAt: string;
   documentCreatedBy?: string | null;
   assignedReviewerId?: string | null;
@@ -162,11 +163,14 @@ export default function ReviewsPage() {
                     assignedReviewerId: review.assignedReviewerId,
                     documentGroupId: review.documentGroupId,
                   });
+                  // Withdrawing belongs to whoever submitted (or wrote) the
+                  // document, or an administrator — the server enforces it.
                   const podeRetirar = !porqueNaoPodeEditar(user, {
                     createdBy: review.documentCreatedBy,
                     assignedReviewerId: review.assignedReviewerId,
                     documentGroupId: review.documentGroupId,
-                  });
+                  }) && (user?.id === review.documentCreatedBy || user?.id === review.requestedById
+                        || !!user?.roles?.includes('ROLE_ADMIN'));
                   const motivo = recusa ? t(recusa) : undefined;
                   return (
                     <tr key={review.id} className="hover:bg-surface/50 transition-colors">

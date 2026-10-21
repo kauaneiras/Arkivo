@@ -112,6 +112,7 @@ public class ReviewController {
             String description,
             String status,
             String requestedByName,
+            UUID requestedById,
             Instant createdAt,
             UUID documentCreatedBy,
             UUID assignedReviewerId,
@@ -137,7 +138,7 @@ public class ReviewController {
 
         StringBuilder sql = new StringBuilder(
             "SELECT rr.id, rr.document_id, d.code AS document_code, d.title AS document_title, " +
-            "rr.title, rr.description, rr.status, u.full_name AS requested_by_name, rr.created_at, " +
+            "rr.title, rr.description, rr.status, u.full_name AS requested_by_name, rr.requested_by, rr.created_at, " +
             "d.created_by AS document_created_by, d.assigned_reviewer_id, d.document_group_id, " +
             "d.current_commit_id, d.official_commit_id, rr.commit_id AS reviewed_commit_id, " +
             "(SELECT c.parent_commit_id FROM commits c WHERE c.id = rr.commit_id) AS base_commit_id, " +
@@ -168,6 +169,7 @@ public class ReviewController {
                 rs.getString("description"),
                 rs.getString("status"),
                 rs.getString("requested_by_name"),
+                rs.getObject("requested_by", UUID.class),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getObject("document_created_by", UUID.class),
                 rs.getObject("assigned_reviewer_id", UUID.class),
@@ -193,7 +195,7 @@ public class ReviewController {
 
         List<ReviewListItemDto> reviews = jdbcTemplate.query(
             "SELECT rr.id, rr.document_id, d.code AS document_code, d.title AS document_title, " +
-            "rr.title, rr.description, rr.status, u.full_name AS requested_by_name, rr.created_at, " +
+            "rr.title, rr.description, rr.status, u.full_name AS requested_by_name, rr.requested_by, rr.created_at, " +
             "d.created_by AS document_created_by, d.assigned_reviewer_id, d.document_group_id, " +
             "d.current_commit_id, d.official_commit_id, rr.commit_id AS reviewed_commit_id, " +
             "(SELECT c.parent_commit_id FROM commits c WHERE c.id = rr.commit_id) AS base_commit_id, " +
@@ -214,6 +216,7 @@ public class ReviewController {
                 rs.getString("description"),
                 rs.getString("status"),
                 rs.getString("requested_by_name"),
+                rs.getObject("requested_by", UUID.class),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getObject("document_created_by", UUID.class),
                 rs.getObject("assigned_reviewer_id", UUID.class),

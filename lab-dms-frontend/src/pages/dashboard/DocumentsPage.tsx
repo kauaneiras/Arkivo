@@ -67,15 +67,19 @@ export default function DocumentsPage() {
     api.get('/users/reviewers')
       .then((res) => setReviewers(res.data))
       .catch(() => setReviewers([]));
-    api.get('/users?status=ACTIVE')
-      .then((res) => setPeople(res.data))
-      .catch(() => setPeople([]));
+    // The full directory is admin-only; asking for it as an editor only put a
+    // 403 in the console on every visit. Non-admins get the fallback below.
+    if (user?.roles?.includes('ROLE_ADMIN')) {
+      api.get('/users?status=ACTIVE')
+        .then((res) => setPeople(res.data))
+        .catch(() => setPeople([]));
+    }
     // The types a laboratory uses are its own (Settings → Document types), so
     // the filter lists those instead of the four that were hardcoded here.
     api.get('/document-types')
       .then((res) => setDocTypes((res.data ?? []).map((d: any) => d.prefix)))
       .catch(() => setDocTypes(['IT', 'PQ', 'PO', 'MQ']));
-  }, []);
+  }, [user?.roles]);
 
   const authorOptions = useMemo(() => {
     if (people.length > 0) return people;
