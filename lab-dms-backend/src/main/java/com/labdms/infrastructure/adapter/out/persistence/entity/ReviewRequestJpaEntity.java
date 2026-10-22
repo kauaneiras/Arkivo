@@ -23,6 +23,9 @@ public class ReviewRequestJpaEntity {
     @Column(name = "target_branch_id", nullable = false)
     private UUID targetBranchId;
 
+    @Column(name = "commit_id")
+    private UUID commitId;
+
     @Column(nullable = false, length = 255)
     private String title;
 
@@ -50,6 +53,8 @@ public class ReviewRequestJpaEntity {
     public void setSourceBranchId(UUID sourceBranchId) { this.sourceBranchId = sourceBranchId; }
     public UUID getTargetBranchId() { return targetBranchId; }
     public void setTargetBranchId(UUID targetBranchId) { this.targetBranchId = targetBranchId; }
+    public UUID getCommitId() { return commitId; }
+    public void setCommitId(UUID commitId) { this.commitId = commitId; }
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
     public String getDescription() { return description; }

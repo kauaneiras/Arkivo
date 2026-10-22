@@ -5,6 +5,10 @@ interface User {
   username: string;
   fullName: string;
   email: string;
+  /** Setores a que pertence (ids). */
+  groups?: string[];
+  /** LOCAL (senha própria) ou KEYCLOAK (login único). */
+  authProvider?: string;
   /**
    * Papéis E permissões, juntos.
    *
@@ -39,6 +43,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     localStorage.removeItem('jwt_token');
     localStorage.removeItem('user_info');
     set({ user: null, isAuthenticated: false });
+    // An SSO session is also ended at the provider, otherwise the next sign-in
+    // happens without a password prompt. The redirect, when it happens, leaves
+    // this page; nothing else here matters after it.
+    void import('../lib/sso').then(({ ssoLogoutRedirect }) => ssoLogoutRedirect());
   },
 
   /**

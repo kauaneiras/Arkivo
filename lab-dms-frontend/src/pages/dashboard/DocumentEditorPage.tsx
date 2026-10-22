@@ -15,14 +15,14 @@ import {
   ArrowLeft, Save, Play, CheckCircle, FileText, History,
   GitCommitHorizontal, Diff, Download, Lock, AlertTriangle, RotateCcw,
   Paperclip, Upload, Trash2, File as FileIcon, BadgeCheck, FolderTree,
-  ChevronUp, ChevronDown,
+  ChevronUp, ChevronDown, GitBranch, Undo2, Cloud, CloudOff, Loader2, Eye,
 } from 'lucide-react';
 import { useI18n, formatDate } from '../../lib/i18n';
 import { Modal, ConfirmModal, DocStatusBadge, useToast } from '../../components/ui';
 import FileTree, { type FileNode } from '../../components/FileTree';
-import { diffLines, collapseDiff } from '../../lib/diff';
+import DiffViewer, { DiffStat, type TreeDiff, type FileDiff } from '../../components/DiffViewer';
 import { cn } from '../../lib/utils';
-import { porqueNaoPodeEditar } from '../../lib/permissoes';
+import { porqueNaoPodeEditar, porqueNaoPodeAprovar } from '../../lib/permissoes';
 import { useAuthStore } from '../../store/authStore';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -35,12 +35,16 @@ interface Commit {
   message: string;
   authorName: string;
   createdAt: string;
+  /** 0 for the working draft, v1..vN for closed versions. */
   revision: number;
   isCurrent: boolean;
   isOfficial: boolean;
+  /** Unsaved changes — the working revision, not a version. */
+  isDraft: boolean;
   branchName: string | null;
   parentCommitId: string | null;
-  sizeBytes: number;
+  fileCount: number;
+  treeBytes: number;
   /** ISO 17025 8.3.2 c) — why this revision was made. */
   changeReason: string | null;
 }
@@ -70,6 +74,20 @@ interface Attachment {
   uploadedAt: string;
 }
 
+interface ReviewItem {
+  id: string;
+  status: string;
+  title: string;
+  requestedByName: string;
+  createdAt: string;
+}
+
+type SidebarView = 'none' | 'files' | 'changes' | 'history' | 'attachments';
+type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
+
+/** How long after the last keystroke the open file is written to the draft. */
+const AUTOSAVE_DELAY_MS = 1500;
+
 export default function DocumentEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -82,14 +100,6 @@ export default function DocumentEditorPage() {
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [numPages, setNumPages] = useState<number | null>(null);
   // True = the paged renderer (default), false = the browser's own PDF viewer.
-  //
-  // Paged is the default because it is the one whose rendering is actually
-  // verified end-to-end: a headless browser loads this page and the pages come
-  // out as painted canvases. It also keeps the preview inside the application's
-  // own chrome. The browser's viewer is a genuinely good escape hatch — it needs
-  // no worker, no module MIME type and no extra assets, so it survives the
-  // environment problems that stop pdf.js — and it is one click away, offered
-  // automatically whenever the paged renderer reports a failure.
   const [pagedView, setPagedView] = useState<boolean>(() => {
     try { return localStorage.getItem('labdms.pdfPagedView') !== '0'; } catch { return true; }
   });
@@ -98,25 +108,10 @@ export default function DocumentEditorPage() {
   }, [pagedView]);
 
   // Why the viewer failed, in the viewer's own words.
-  //
-  // react-pdf renders a fixed "Failed to load PDF file." and swallows the
-  // reason. Every cause looks identical on screen — a worker that did not
-  // start, a response that was not really a PDF, a revoked blob — so there is
-  // nothing to act on. Holding the message here puts the actual cause in front
-  // of whoever has to fix it.
   const [viewerError, setViewerError] = useState<string | null>(null);
-
-  // What actually renders. A failure demotes the paged view for as long as the
-  // failure stands, without rewriting what the reader chose. Declared after
-  // viewerError because it reads it.
   const showPaged = pagedView && !viewerError;
 
   // The page is rendered at the width of the panel, not at a fixed size.
-  //
-  // A hard-coded width larger than the panel clips the right-hand margin of
-  // every page, and on a laptop screen with the file tree open that is most of
-  // the time. Measuring means the preview also follows the panel when the window
-  // is resized instead of only being right at one size.
   const previewRef = useRef<HTMLDivElement>(null);
   const [previewWidth, setPreviewWidth] = useState(560);
   useEffect(() => {
@@ -128,32 +123,25 @@ export default function DocumentEditorPage() {
     ro.observe(el);
     return () => ro.disconnect();
   }, [showPaged, pdfBlobUrl]);
-  // Minus the container padding, and never so narrow that the page is unreadable.
   const pageWidth = Math.max(280, previewWidth - 48);
+
   const [isCompiling, setIsCompiling] = useState(false);
   const [compileError, setCompileError] = useState<string | null>(null);
-  // The errors live in a badge that opens on demand, so a long pdflatex log
-  // does not push the document itself off the screen.
   const [errorsOpen, setErrorsOpen] = useState(false);
-  // True when the PDF on screen is from an earlier, successful compilation.
   const [pdfIsStale, setPdfIsStale] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [selectedCommitId, setSelectedCommitId] = useState<string | null>(null);
-  // Espelhos para uso dentro de callbacks definidos antes de fetchCommits, e
-  // para ler o valor corrente sem o capturar numa closure antiga.
   const selectedCommitIdRef = useRef<string | null>(null);
   useEffect(() => { selectedCommitIdRef.current = selectedCommitId; }, [selectedCommitId]);
-  const fetchCommitsRef = useRef<((selectLatest?: boolean) => void) | null>(null);
-  // "?panel=history" lets the documents list jump straight into the history,
-  // which is where people go to inspect or change the version in force.
+  const fetchCommitsRef = useRef<((selectLatest?: boolean) => Promise<Commit[]>) | null>(null);
+
+  // "?panel=history" lets the documents list jump straight into the history.
   const [searchParams] = useSearchParams();
-  // The file tree is open by default: a LaTeX project is a tree, and hiding it
-  // is what made the editor feel like a textarea instead of Overleaf.
-  const [sidebarView, setSidebarView] = useState<'none' | 'files' | 'history' | 'attachments'>(
-    searchParams.get('panel') === 'history' ? 'history'
-      : searchParams.get('panel') === 'attachments' ? 'attachments' : 'files',
-  );
+  const [sidebarView, setSidebarView] = useState<SidebarView>(() => {
+    const p = searchParams.get('panel');
+    return p === 'history' ? 'history' : p === 'attachments' ? 'attachments' : p === 'changes' ? 'changes' : 'files';
+  });
 
   // Multi-file project state
   const [projectFiles, setProjectFiles] = useState<FileNode[]>([]);
@@ -161,28 +149,30 @@ export default function DocumentEditorPage() {
   const [binaryPreviewUrl, setBinaryPreviewUrl] = useState<string | null>(null);
   const [binaryPreviewType, setBinaryPreviewType] = useState<string>('');
   const binaryUrlRef = useRef<string | null>(null);
-  // Whether the file currently open is editable text. A binary file (a figure)
-  // is shown, never edited — and its path must never receive the editor buffer.
   const openIsTextRef = useRef(true);
-  // Tracks unsaved edits so we can warn instead of discarding them.
-  const [isDirty, setIsDirty] = useState(false);
+
+  // Unsaved edits in the buffer, and what the autosave is doing about them.
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const isDirtyRef = useRef(false);
   const markDirty = useCallback((dirty: boolean) => {
     isDirtyRef.current = dirty;
-    setIsDirty(dirty);
+    setSaveState((s) => (dirty ? 'dirty' : s === 'dirty' ? 'idle' : s));
   }, []);
-  const showHistory = sidebarView === 'history';
+
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [attachmentToDelete, setAttachmentToDelete] = useState<Attachment | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Working changes (draft vs last saved version) — the "Changes" tab.
+  const [workingDiff, setWorkingDiff] = useState<TreeDiff | null>(null);
+  const [openReview, setOpenReview] = useState<ReviewItem | null>(null);
+
   // Modals
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
-  // ISO 17025 8.3.2 c) — formal justification for the revision
   const [changeReason, setChangeReason] = useState('');
-  // ISO 17025 8.3.2 d) — read acknowledgement of the version in force
   const [ackStatus, setAckStatus] = useState<{ required: boolean; acknowledged: boolean; acknowledgedAt: string | null } | null>(null);
   const [periodicModalOpen, setPeriodicModalOpen] = useState(false);
   const [periodicNotes, setPeriodicNotes] = useState('');
@@ -191,44 +181,65 @@ export default function DocumentEditorPage() {
   const [reviewTitle, setReviewTitle] = useState('');
   const [reviewDescription, setReviewDescription] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
-  const [diffData, setDiffData] = useState<{ commit: Commit } | null>(null);
-  const [diffResult, setDiffResult] = useState<ReturnType<typeof collapseDiff> | null>(null);
+  const [diffModal, setDiffModal] = useState<{ from?: string | null; to?: string | null; caption: string; initialPath?: string | null } | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<Commit | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [officialTarget, setOfficialTarget] = useState<Commit | null>(null);
   const [isSettingOfficial, setIsSettingOfficial] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const [isDiscarding, setIsDiscarding] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  // ZIP chosen and waiting for confirmation: the file and the server's preview.
+  const [zipPendente, setZipPendente] = useState<{
+    file: File; preview: TreeDiff; files: Record<string, FileDiff>; root: string | null;
+  } | null>(null);
+  const [zipSaveAsVersion, setZipSaveAsVersion] = useState(false);
+  const [zipMessage, setZipMessage] = useState('');
+  const [zipReason, setZipReason] = useState('');
 
   const blobUrlRef = useRef<string | null>(null);
-  // Mirrors `content` so callbacks/shortcuts always compile the latest text
   const contentRef = useRef('');
   contentRef.current = content;
-  // Source of the PDF currently on screen — lets auto-compile skip work when
-  // nothing actually changed (and the engine cache make repeats free anyway).
   const lastCompiledRef = useRef<string | null>(null);
 
-  const isLocked = doc?.status === 'IN_REVIEW' || doc?.status === 'OBSOLETE';
+  /* ------------------------------------------------------------------ */
+  /* Derived state                                                       */
+  /* ------------------------------------------------------------------ */
 
-  // Por que esta pessoa não pode escrever neste documento — ou null, se pode.
-  // Mesma regra que o servidor aplica; aqui serve para não oferecer o que vai
-  // ser recusado, e para dizer o motivo antes de a pessoa tentar.
+  const isLocked = doc?.status === 'IN_REVIEW' || doc?.status === 'OBSOLETE';
+  const draft = useMemo(() => commits.find((c) => c.isDraft) ?? null, [commits]);
+  const headId = commits[0]?.id ?? null;
+  const closedCommits = useMemo(() => commits.filter((c) => !c.isDraft), [commits]);
+  const viewingOld = !!selectedCommitId && !!headId && selectedCommitId !== headId;
+  const selectedCommit = useMemo(() => commits.find((c) => c.id === selectedCommitId) ?? null, [commits, selectedCommitId]);
+
   const recusaEditar = porqueNaoPodeEditar(authUser, {
     createdBy: doc?.createdBy,
     assignedReviewerId: doc?.assignedReviewerId,
     documentGroupId: doc?.documentGroupId,
     status: doc?.status,
   });
+  const recusaAprovar = porqueNaoPodeAprovar(authUser, {
+    createdBy: doc?.createdBy,
+    assignedReviewerId: doc?.assignedReviewerId,
+    documentGroupId: doc?.documentGroupId,
+    status: doc?.status,
+  });
+  // Can this person write into THIS view right now?
+  const canWrite = !isLocked && !recusaEditar && !viewingOld;
+  const canWriteRef = useRef(canWrite);
+  useEffect(() => { canWriteRef.current = canWrite; }, [canWrite]);
   const latexExtensions = useMemo(() => [StreamLanguage.define(stex)], []);
+  const changedFileCount = workingDiff ? workingDiff.added + workingDiff.removed + workingDiff.modified : 0;
+
+  /* ------------------------------------------------------------------ */
+  /* Loading                                                             */
+  /* ------------------------------------------------------------------ */
 
   const setPdfUrl = useCallback((url: string | null) => {
     if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
     blobUrlRef.current = url;
     setPdfBlobUrl(url);
-    // Both belong to the PDF being replaced, so both die with it.
-    //
-    // numPages especially: keeping the previous count makes React ask the NEW
-    // document for pages it may not have — page 3 of a document that now has
-    // one. That fails inside the renderer and produces a blank area with no
-    // message, which is indistinguishable from "the preview is broken".
     setNumPages(null);
     setViewerError(null);
   }, []);
@@ -242,18 +253,22 @@ export default function DocumentEditorPage() {
     }
   }, [id]);
 
+  const fetchOpenReview = useCallback(async () => {
+    try {
+      const res = await api.get(`/documents/${id}/reviews`);
+      const items: ReviewItem[] = res.data ?? [];
+      setOpenReview(items.find((r) => r.status === 'OPEN') ?? null);
+    } catch {
+      setOpenReview(null);
+    }
+  }, [id]);
+
   const loadPdf = useCallback(async (commitId: string, silent = true) => {
     try {
       const res = await api.get(`/latex/pdf/${commitId}`, {
         responseType: 'blob',
-        // Without this axios asks for JSON, and a content-negotiating backend may
-        // answer with a base64-encoded PDF — text the viewer cannot open.
         headers: { Accept: 'application/pdf' },
       });
-      // Never hand an unverified blob to the PDF viewer. An empty body, a JSON
-      // error, or an HTML proxy page would all produce "Failed to load PDF file"
-      // with no way to recover. Returning false instead makes the caller compile
-      // a fresh preview.
       if (!(await isPdfBlob(res.data))) {
         setPdfUrl(null);
         return false;
@@ -261,13 +276,13 @@ export default function DocumentEditorPage() {
       setPdfUrl(URL.createObjectURL(res.data));
       return true;
     } catch {
-      // 404 = this version was never compiled. Expected, not an error.
       if (!silent) toast('info', t('editor.pdfError'));
       setPdfUrl(null);
       return false;
     }
   }, [setPdfUrl, toast, t]);
 
+  /** The version's root text — from the TREE, so it is never stale. */
   const loadCommitContent = useCallback(async (commitId: string): Promise<string> => {
     try {
       const res = await api.get(`/documents/${id}/versioning/commits/${commitId}/content`);
@@ -275,14 +290,13 @@ export default function DocumentEditorPage() {
       setContent(source);
       contentRef.current = source;
       setSelectedCommitId(commitId);
+      selectedCommitIdRef.current = commitId;
       return source;
     } catch (err) {
       console.error(err);
       return '';
     }
   }, [id]);
-
-  /* -------------------- Multi-file project (Overleaf) ------------------ */
 
   const setBinaryUrl = useCallback((url: string | null, type = '') => {
     if (binaryUrlRef.current) URL.revokeObjectURL(binaryUrlRef.current);
@@ -294,7 +308,6 @@ export default function DocumentEditorPage() {
   const fetchProjectFiles = useCallback(async (commitId: string) => {
     try {
       const res = await api.get(`/documents/${id}/files`, { params: { commitId } });
-      // The endpoint returns the array itself, not an envelope.
       const list: FileNode[] = Array.isArray(res.data) ? res.data : [];
       setProjectFiles(list);
       return list;
@@ -305,46 +318,60 @@ export default function DocumentEditorPage() {
     }
   }, [id]);
 
+  /** What the draft changes against the last saved version. */
+  const refreshWorkingDiff = useCallback(async (draftId: string | null) => {
+    if (!draftId) { setWorkingDiff(null); return; }
+    try {
+      const res = await api.get(`/documents/${id}/files/diff`, { params: { to: draftId } });
+      setWorkingDiff(res.data);
+    } catch {
+      setWorkingDiff(null);
+    }
+  }, [id]);
+
+  useEffect(() => { refreshWorkingDiff(draft?.id ?? null); }, [draft?.id, refreshWorkingDiff]);
+
   /**
-   * Persists the open file so a compile or a version save sees the edit.
+   * Writes the open file into the working draft.
    *
-   * Refuses to write when the open file is binary. `openPath` follows the tree
-   * selection while `content` still holds the last .tex, so without this guard
-   * opening a figure and pressing Save wrote LaTeX source over the image and
-   * destroyed it.
+   * Refuses to write when the open file is binary, when the view is read-only,
+   * or when an OLD version is on screen — the server would write into the
+   * draft, silently replacing the newest text with an old one.
    */
   const persistOpenFile = useCallback(async () => {
     if (!openPath || !openIsTextRef.current) return;
-    // No commitId on writes: the server picks the editable version and refuses
-    // if the document is locked, so the client cannot target an approved one.
-    const res = await api.put(`/documents/${id}/files/content`, {
-      path: openPath, content: contentRef.current,
-    });
-    markDirty(false);
+    if (!canWriteRef.current) return;
+    setSaveState('saving');
+    try {
+      const res = await api.put(`/documents/${id}/files/content`, {
+        path: openPath, content: contentRef.current,
+      });
+      isDirtyRef.current = false;
+      setSaveState('saved');
+      setLastSavedAt(new Date());
 
-    // Editar um documento aprovado abre uma revisão nova do lado do servidor —
-    // a versão em vigor é registo da qualidade e não se reescreve. Quando isso
-    // acontece, o editor tem de passar a apontar para a revisão nova; se
-    // continuasse na anterior, pré-visualizaria a árvore antiga e a lista de
-    // versões ficaria a mentir sobre onde o trabalho está a ser feito.
-    const working: string | undefined = res.headers?.['x-working-commit'];
-    if (working && working !== selectedCommitIdRef.current) {
-      setSelectedCommitId(working);
-      selectedCommitIdRef.current = working;
-      fetchCommitsRef.current?.(false);
+      // The first write after a save OPENS a draft on the server. The editor
+      // follows it, and the history gains the "unsaved changes" entry.
+      const working: string | undefined = res.headers?.['x-working-commit'];
+      if (working && working !== selectedCommitIdRef.current) {
+        setSelectedCommitId(working);
+        selectedCommitIdRef.current = working;
+        await fetchCommitsRef.current?.(false);
+      } else {
+        refreshWorkingDiff(working ?? selectedCommitIdRef.current);
+      }
+    } catch (err: any) {
+      setSaveState('error');
+      throw err;
     }
-  }, [id, openPath, markDirty]);
+  }, [id, openPath, refreshWorkingDiff]);
 
   /** Opens a file from the tree: text goes into the editor, images render inline. */
   const openFile = useCallback(async (file: FileNode) => {
     if (!selectedCommitId) return;
     if (file.path === openPath) return;
 
-    // Save what is in the editor BEFORE loading another file. Switching used to
-    // overwrite the buffer, so every edit made since the last version save was
-    // discarded the moment the user clicked another file in the tree — silent
-    // loss in the most ordinary action there is in a multi-file editor.
-    if (isDirtyRef.current && openIsTextRef.current && !isLocked) {
+    if (isDirtyRef.current && openIsTextRef.current && canWriteRef.current) {
       try {
         await persistOpenFile();
       } catch (err: any) {
@@ -370,7 +397,6 @@ export default function DocumentEditorPage() {
         console.error(err);
       }
     } else {
-      // Binary: don't put bytes in a text editor. Show the image/PDF instead.
       try {
         const res = await api.get(`/documents/${id}/files/raw`, {
           params: { commitId: selectedCommitId, path: file.path },
@@ -381,53 +407,96 @@ export default function DocumentEditorPage() {
         console.error(err);
       }
     }
-  }, [id, selectedCommitId, openPath, isLocked, persistOpenFile, setBinaryUrl, markDirty, toast, t]);
+  }, [id, selectedCommitId, openPath, persistOpenFile, setBinaryUrl, markDirty, toast, t]);
 
-  const refreshTree = useCallback(async () => {
-    if (selectedCommitId) await fetchProjectFiles(selectedCommitId);
+  /**
+   * After a write that may have opened a draft: follow the draft, reload the
+   * tree, the document and the working diff.
+   */
+  const afterWrite = useCallback(async (workingCommit?: string | null) => {
+    const target = workingCommit ?? selectedCommitIdRef.current;
+    if (target && target !== selectedCommitIdRef.current) {
+      setSelectedCommitId(target);
+      selectedCommitIdRef.current = target;
+      await fetchCommitsRef.current?.(false);
+    }
+    if (target) await fetchProjectFiles(target);
     await fetchDocument();
-  }, [selectedCommitId, fetchProjectFiles, fetchDocument]);
+    refreshWorkingDiff(target ?? null);
+  }, [fetchProjectFiles, fetchDocument, refreshWorkingDiff]);
 
   const handleUploadProjectFile = useCallback(async (file: File, folder: string) => {
     const form = new FormData();
     form.append('file', file);
     if (folder) form.append('folder', folder);
     try {
-      await api.post(`/documents/${id}/files/upload`, form,
+      const res = await api.post(`/documents/${id}/files/upload`, form,
         { headers: { 'Content-Type': 'multipart/form-data' } });
       toast('success', t('tree.uploadSuccess'));
-      await refreshTree();
+      await afterWrite(res.headers?.['x-working-commit']);
+      lastCompiledRef.current = null;
     } catch (err: any) {
       toast('error', err.response?.data?.message || t('tree.uploadError'));
     }
-  }, [id, refreshTree, toast, t]);
+  }, [id, afterWrite, toast, t]);
 
-  const handleImportZip = useCallback(async (file: File) => {
-    if (!selectedCommitId) return;
+  /** First step of a ZIP: ask what it WOULD do, writing nothing. */
+  const handleZipEscolhido = useCallback(async (file: File) => {
     const form = new FormData();
     form.append('file', file);
     setIsCompiling(true);
     try {
+      const res = await api.post(`/documents/${id}/files/import-zip?dryRun=true`, form,
+        { headers: { 'Content-Type': 'multipart/form-data' } });
+      setZipSaveAsVersion(false);
+      setZipMessage(t('zip.defaultMessage').replace('{name}', file.name));
+      setZipReason('');
+      setZipPendente({ file, preview: res.data.preview, files: res.data.previewDiffs ?? {}, root: res.data.rootPath });
+    } catch (err: any) {
+      toast('error', err.response?.data?.message || t('zip.dryRunError'));
+    } finally {
+      setIsCompiling(false);
+    }
+  }, [id, toast, t]);
+
+  const handleImportZip = useCallback(async () => {
+    if (!zipPendente) return;
+    const form = new FormData();
+    form.append('file', zipPendente.file);
+    setIsCompiling(true);
+    try {
       const res = await api.post(`/documents/${id}/files/import-zip`, form,
         { headers: { 'Content-Type': 'multipart/form-data' } });
-      const list = await fetchProjectFiles(selectedCommitId);
-      await fetchDocument();
       toast('success', t('tree.importSuccess')
-        .replace('{n}', String(res.data.filesImported ?? list.length))
+        .replace('{n}', String(res.data.filesImported ?? 0))
         .replace('{root}', res.data.rootPath ?? '—'));
       if ((res.data.rootCandidates?.length ?? 0) > 1) {
-        // Ambiguous root (the reference project has main.tex AND bkpmain.tex):
-        // say so instead of silently compiling a guess.
         toast('info', t('tree.multipleRoots'));
       }
-      const root = list.find((f) => f.isRoot);
-      if (root) await openFile(root);
+
+      if (zipSaveAsVersion && zipMessage.trim() && zipReason.trim()) {
+        await api.post(`/documents/${id}/versioning/commits`, {
+          latexSource: null,
+          message: zipMessage.trim(),
+          changeReason: zipReason.trim(),
+        });
+        toast('success', t('editor.saveSuccess'));
+      } else {
+        toast('info', t('zip.appliedToDraft'));
+      }
+      setZipPendente(null);
+      lastCompiledRef.current = null;
+      markDirty(false);
+      setOpenPath(null);
+      // Reload from the head: the ZIP landed in the draft (or became a version).
+      await fetchCommitsRef.current?.(true);
+      await fetchDocument();
     } catch (err: any) {
       toast('error', err.response?.data?.message || t('tree.importError'));
     } finally {
       setIsCompiling(false);
     }
-  }, [id, selectedCommitId, fetchProjectFiles, fetchDocument, openFile, toast, t]);
+  }, [id, zipPendente, zipSaveAsVersion, zipMessage, zipReason, markDirty, fetchDocument, toast, t]);
 
   const handleExportZip = useCallback(async () => {
     if (!selectedCommitId) return;
@@ -443,22 +512,11 @@ export default function DocumentEditorPage() {
   }, [id, selectedCommitId, doc]);
 
   /* ------------------------------ Compile ----------------------------- */
-  /* Defined before fetchCommits: the first render auto-compiles a preview. */
 
-  /**
-   * @param ctx lets a caller that has just fetched the tree pass it in
-   *        explicitly. Without this the first automatic preview of a multi-file
-   *        project used the `projectFiles` captured when the callback was
-   *        created — still empty — so it compiled the root file ALONE, with no
-   *        \input and no \includegraphics, and failed every time a document was
-   *        opened. Reading it from state here would always be one render behind.
-   */
   const handleCompile = useCallback(async (
     source?: string,
     ctx?: { files?: FileNode[]; commitId?: string | null },
   ) => {
-    // Overleaf-style: compiles the CURRENT editor content via /latex/preview,
-    // no commit required — works before the document is ever saved.
     const latexSource = source ?? contentRef.current;
     const files = ctx?.files ?? projectFiles;
     const commitId = ctx?.commitId ?? selectedCommitId;
@@ -469,17 +527,8 @@ export default function DocumentEditorPage() {
     try {
       const options = {
         responseType: 'blob' as const,
-        // Both types on purpose: success returns a PDF, failure returns the
-        // compilation log as JSON (422). Asking only for PDF would make Spring
-        // answer 406 on the error path and we would lose the error message.
         headers: { Accept: 'application/pdf, application/json' },
       };
-      // A project must be compiled as a tree — \input and \includegraphics only
-      // resolve when the sibling files are on disk. The unsaved buffer of the
-      // open file rides along so the preview reflects what is on screen.
-      // The overlay is only sent for a TEXT file. Sending it while a figure was
-      // open made the server write the editor's LaTeX over the image inside the
-      // compile directory, so the figure disappeared from the rendered PDF.
       const overlayPath = openPath && openIsTextRef.current ? openPath : null;
       const res = isProject
         ? await api.post(
@@ -489,8 +538,6 @@ export default function DocumentEditorPage() {
           )
         : await api.post('/latex/preview', { latexSource }, options);
       if (!(await isPdfBlob(res.data))) {
-        // 200 but not a PDF. Keep whatever is on screen: a stale preview the
-        // user can still read beats an empty panel.
         setCompileError(t('editor.compileError'));
         setPdfIsStale(true);
         return;
@@ -499,8 +546,6 @@ export default function DocumentEditorPage() {
       setPdfIsStale(false);
       lastCompiledRef.current = latexSource;
 
-      // A LaTeX document very often renders WITH errors, so the errors are shown
-      // beside the PDF rather than instead of it — the same thing Overleaf does.
       const problems = Number(res.headers['x-latex-problems'] ?? 0);
       if (problems > 0) {
         const parsed = res.headers['x-latex-error-list'];
@@ -510,23 +555,17 @@ export default function DocumentEditorPage() {
       }
     } catch (err: any) {
       console.error(err);
-      // The response may be a Blob (responseType: 'blob') carrying JSON with
-      // either a pdflatex log or a security-rule message.
       let payload: any = err.response?.data;
       if (payload instanceof Blob) {
         try { payload = JSON.parse(await payload.text()); } catch { payload = null; }
       }
-
       const log: string = payload?.log ?? '';
       const message: string = payload?.message ?? '';
       const parsed: string[] = Array.isArray(payload?.errors) ? payload.errors : [];
-
       if (parsed.length > 0) {
-        // Backend already parsed the engine log into actionable lines
         setCompileError(parsed.join('\n'));
         toast('error', t('editor.compileError'));
       } else if (log) {
-        // Show the most relevant lines of the pdflatex log (Overleaf-style)
         const errorLines = log.split('\n').filter((l) => l.startsWith('!') || /^l\.\d+/.test(l));
         const detail = (errorLines.length ? errorLines : log.split('\n').filter((l) => l.trim()).slice(-8)).join('\n');
         setCompileError(detail);
@@ -535,10 +574,6 @@ export default function DocumentEditorPage() {
         setCompileError(message || t('editor.compileError'));
         toast('error', message || t('editor.compileError'));
       }
-      // Deliberately NOT clearing the PDF. A failed compile used to blank the
-      // preview, so one typo replaced the whole document with an empty panel and
-      // the user lost their reference for fixing it. The last good render stays,
-      // flagged as out of date.
       setPdfIsStale(true);
     } finally {
       setIsCompiling(false);
@@ -552,20 +587,17 @@ export default function DocumentEditorPage() {
       setCommits(list);
       if (list.length > 0 && selectLatest) {
         const source = await loadCommitContent(list[0].id);
-        // Load the file tree before deciding what to show: a project opens on
-        // its root file, a single-file document on its only content.
         const files = await fetchProjectFiles(list[0].id);
         const root = files.find((f) => f.isRoot) ?? files.find((f) => f.path.endsWith('.tex'));
-        if (root) setOpenPath(root.path);
+        setOpenPath(root ? root.path : null);
+        openIsTextRef.current = true;
+        setBinaryUrl(null);
+        markDirty(false);
 
-        // Show a PDF right away: use the stored one, otherwise compile a
-        // preview automatically (Overleaf-style first render).
         const hasPdf = await loadPdf(list[0].id);
         if (hasPdf) {
-          // The stored PDF matches this source — don't recompile it.
           lastCompiledRef.current = source;
         } else if (source || files.length > 0) {
-          // Pass the tree we just fetched: state has not re-rendered yet.
           handleCompile(source, { files, commitId: list[0].id });
         }
       }
@@ -574,14 +606,14 @@ export default function DocumentEditorPage() {
       console.error(err);
       return [];
     }
-  }, [id, loadCommitContent, loadPdf, handleCompile, fetchProjectFiles]);
+  }, [id, loadCommitContent, loadPdf, handleCompile, fetchProjectFiles, setBinaryUrl, markDirty]);
 
-  // Publicada para quem foi definido antes dela — ver persistOpenFile.
   useEffect(() => { fetchCommitsRef.current = fetchCommits; }, [fetchCommits]);
 
   useEffect(() => {
     fetchDocument();
     fetchCommits();
+    fetchOpenReview();
     return () => {
       if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
       if (binaryUrlRef.current) URL.revokeObjectURL(binaryUrlRef.current);
@@ -589,14 +621,11 @@ export default function DocumentEditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // Live preview: recompiles a little after typing stops, like Overleaf's
-  // auto-compile. Debounced so it never fires per keystroke, skipped while a
-  // compilation is running or when the text has not changed since the last one.
+  // Live preview: recompiles a little after typing stops, like Overleaf.
   useEffect(() => {
     if (!content.trim()) return;
     if (content === lastCompiledRef.current) return;
     if (isCompiling) return;
-
     const timer = setTimeout(() => {
       if (contentRef.current === lastCompiledRef.current) return;
       handleCompile(contentRef.current);
@@ -604,9 +633,27 @@ export default function DocumentEditorPage() {
     return () => clearTimeout(timer);
   }, [content, isCompiling, handleCompile]);
 
-  // Saving a version is a deliberate act here (it needs a message and a change
-  // reason for 8.3.2 c), so people accumulate real work between saves. Closing
-  // the tab must not throw that away without a word.
+  /**
+   * Autosave into the working draft.
+   *
+   * Saving a VERSION is a deliberate act (message + change reason, ISO 8.3.2 c).
+   * Saving the FILE is not: it goes to the draft, which is the working tree and
+   * never a quality record, so there is no reason to let edits sit only in the
+   * browser where a closed tab loses them. The draft is what "Changes" shows.
+   */
+  useEffect(() => {
+    if (saveState !== 'dirty') return;
+    if (!canWrite || !openPath || !openIsTextRef.current) return;
+    const timer = setTimeout(() => {
+      if (!isDirtyRef.current) return;
+      persistOpenFile().catch((err: any) => {
+        toast('error', err.response?.data?.message || t('tree.saveFileError'));
+      });
+    }, AUTOSAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [saveState, content, canWrite, openPath, persistOpenFile, toast, t]);
+
+  // Closing the tab with a write still pending (autosave not yet fired).
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
       if (!isDirtyRef.current) return;
@@ -626,87 +673,94 @@ export default function DocumentEditorPage() {
         handleCompile();
       } else if (e.key.toLowerCase() === 's') {
         e.preventDefault();
-        if (!isLocked) { setCommitMessage(''); setSaveModalOpen(true); }
+        if (canWriteRef.current) { setSaveModalOpen(true); }
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleCompile, isLocked]);
+  }, [handleCompile]);
 
   /* ------------------------------- Save ------------------------------- */
 
-  const handleSave = async () => {
-    if (!commitMessage.trim()) return;
-    // 8.3.2 c) — an assessor asks "what changed and why"; a free-form commit
-    // message is not that answer, so the reason is required by the UI.
-    if (!changeReason.trim()) {
+  /** Closes the draft as a version: message + reason (ISO 8.3.2 c). */
+  const saveVersion = useCallback(async (message: string, reason: string) => {
+    if (!message.trim()) return false;
+    if (!reason.trim()) {
       toast('error', t('editor.changeReasonRequired'));
-      return;
+      return false;
     }
     setIsSaving(true);
     try {
-      // Write the open file into the tree BEFORE creating the version. The new
-      // version copies the tree from the current one, so an edit that is still
-      // only in the editor buffer would not be part of the version saved.
-      if (projectFiles.length > 0) await persistOpenFile();
-
+      // Write the open file into the draft BEFORE closing it.
+      if (isDirtyRef.current) await persistOpenFile();
       await api.post(`/documents/${id}/versioning/commits`, {
-        latexSource: content,
-        message: commitMessage.trim(),
-        changeReason: changeReason.trim(),
+        latexSource: contentRef.current,
+        message: message.trim(),
+        changeReason: reason.trim(),
       });
       toast('success', t('editor.saveSuccess'));
+      lastCompiledRef.current = null;
+      markDirty(false);
+      setSaveState('idle');
+      // "Draft saved at 16:51" would be stale now: everything is a version.
+      setLastSavedAt(null);
+      await fetchCommits();
+      await fetchDocument();
+      return true;
+    } catch (err: any) {
+      console.error(err);
+      toast('error', err.response?.data?.message ?? t('editor.saveError'));
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [id, persistOpenFile, fetchCommits, fetchDocument, markDirty, toast, t]);
+
+  const handleSave = async () => {
+    const ok = await saveVersion(commitMessage, changeReason);
+    if (ok) {
       setSaveModalOpen(false);
       setCommitMessage('');
       setChangeReason('');
-      // The brand new version has no stored PDF yet, so the preview is rebuilt
-      // from the source instead of showing an empty viewer.
+    }
+  };
+
+  const handleDiscardDraft = async () => {
+    setIsDiscarding(true);
+    try {
+      await api.delete(`/documents/${id}/versioning/working`);
+      toast('success', t('changes.discarded'));
+      setDiscardOpen(false);
+      isDirtyRef.current = false;
+      setSaveState('idle');
+      setLastSavedAt(null);
       lastCompiledRef.current = null;
-      fetchCommits();
-      fetchDocument();
+      await fetchCommits();
+      await fetchDocument();
     } catch (err: any) {
-      console.error(err);
-      // O servidor explica a recusa — falta de permissão, setor, documento
-      // bloqueado. Substituir isso por "erro ao salvar" apagava a única
-      // informação capaz de dizer ao utilizador o que fazer a seguir.
-      toast('error', err.response?.data?.message ?? t('editor.saveError'));
+      toast('error', err.response?.data?.message ?? t('common.error'));
     } finally {
-      setIsSaving(false);
+      setIsDiscarding(false);
     }
   };
 
   /* --------------------------- Submit review -------------------------- */
 
   /**
-   * Submete para aprovação — gravando primeiro, se houver o que gravar.
-   *
-   * <p>A revisão recai sobre a última versão GRAVADA. Quem editava e carregava
-   * em "Submeter" sem gravar mandava para aprovação o texto anterior, sem
-   * qualquer aviso: o revisor lia uma coisa e o autor julgava ter enviado
-   * outra — e o que fica aprovado, e em vigor, é o que o revisor viu. Numa
-   * norma que existe para garantir que o documento aprovado é o documento
-   * certo, isto é o pior tipo de falha silenciosa.
-   *
-   * <p>A gravação vem antes e, se falhar, a submissão NÃO acontece: enviar para
-   * revisão um conteúdo que não conseguiu ser gravado repetiria o mesmo engano
-   * por outro caminho.
+   * Submits for approval — saving the draft as a version first when there is
+   * one. The review decides on a SAVED version; the request's title and
+   * description become that version's message and change reason.
    */
   const handleSubmitReview = async () => {
     if (!reviewTitle.trim()) return;
     setIsSubmittingReview(true);
     try {
-      if (isDirtyRef.current) {
-        if (projectFiles.length > 0) await persistOpenFile();
-        await api.post(`/documents/${id}/versioning/commits`, {
-          latexSource: contentRef.current,
-          message: t('editor.autoCommitMessage').replace('{title}', reviewTitle.trim()),
-          // 8.3.2 c) exige o motivo da alteração. Aqui ele é o próprio pedido de
-          // revisão, que é uma resposta honesta: a alteração foi feita para ser
-          // submetida a aprovação, e o texto do pedido descreve-a.
-          changeReason: reviewDescription.trim() || reviewTitle.trim(),
-        });
-        markDirty(false);
-        lastCompiledRef.current = null;
+      if (draft || isDirtyRef.current) {
+        const ok = await saveVersion(
+          t('editor.autoCommitMessage').replace('{title}', reviewTitle.trim()),
+          reviewDescription.trim() || reviewTitle.trim(),
+        );
+        if (!ok) return;
         toast('info', t('editor.autoCommitDone'));
       }
 
@@ -718,16 +772,27 @@ export default function DocumentEditorPage() {
       setSubmitModalOpen(false);
       setReviewTitle('');
       setReviewDescription('');
-      fetchCommits();
-      fetchDocument();
+      await fetchCommits(false);
+      await fetchDocument();
+      await fetchOpenReview();
     } catch (err: any) {
       console.error(err);
-      // A mensagem do servidor explica a recusa (falta de permissão, setor,
-      // documento bloqueado). Trocá-la por um texto genérico era o que fazia
-      // "não consigo submeter" ser impossível de diagnosticar de fora.
       toast('error', err.response?.data?.message ?? t('editor.submitError'));
     } finally {
       setIsSubmittingReview(false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!openReview) return;
+    try {
+      await api.post(`/reviews/${openReview.id}/withdraw`);
+      toast('success', t('editor.withdrawSuccess'));
+      setWithdrawOpen(false);
+      await fetchDocument();
+      await fetchOpenReview();
+    } catch (err: any) {
+      toast('error', err.response?.data?.message ?? t('common.error'));
     }
   };
 
@@ -737,15 +802,17 @@ export default function DocumentEditorPage() {
     if (!restoreTarget) return;
     setIsRestoring(true);
     try {
-      // Git-style revert: creates a NEW version, history stays immutable
-      await api.post(`/documents/${id}/versioning/commits/${restoreTarget.id}/restore`);
+      await api.post(`/documents/${id}/versioning/commits/${restoreTarget.id}/restore`, {});
       toast('success', t('editor.restoreSuccess'));
       setRestoreTarget(null);
+      lastCompiledRef.current = null;
+      isDirtyRef.current = false;
+      setSaveState('idle');
       await fetchCommits();
-      fetchDocument();
-    } catch (err) {
+      await fetchDocument();
+    } catch (err: any) {
       console.error(err);
-      toast('error', t('editor.restoreError'));
+      toast('error', err.response?.data?.message ?? t('editor.restoreError'));
     } finally {
       setIsRestoring(false);
     }
@@ -776,7 +843,7 @@ export default function DocumentEditorPage() {
       const res = await api.get(`/documents/${id}/acknowledgements/me`);
       setAckStatus(res.data);
     } catch {
-      setAckStatus(null);   // never block the editor over this
+      setAckStatus(null);
     }
   }, [id]);
 
@@ -799,8 +866,6 @@ export default function DocumentEditorPage() {
     if (!officialTarget) return;
     setIsSettingOfficial(true);
     try {
-      // Elects this revision as the one in force. Nothing is deleted — any other
-      // revision can be elected later.
       await api.put(`/documents/${id}/official-version/${officialTarget.id}`);
       toast('success', t('editor.makeOfficialSuccess'));
       setOfficialTarget(null);
@@ -814,26 +879,30 @@ export default function DocumentEditorPage() {
     }
   };
 
-  /* -------------------------------- Diff ------------------------------ */
+  /* ------------------------------ History ----------------------------- */
 
-  const handleShowDiff = async (commit: Commit) => {
-    const idx = commits.findIndex((c) => c.id === commit.id);
-    const parent = commits[idx + 1];
-    try {
-      const [currentRes, parentRes] = await Promise.all([
-        api.get(`/documents/${id}/versioning/commits/${commit.id}/content`),
-        parent
-          ? api.get(`/documents/${id}/versioning/commits/${parent.id}/content`)
-          : Promise.resolve({ data: { content: '' } }),
-      ]);
-      const lines = diffLines(parentRes.data.content ?? '', currentRes.data.content ?? '');
-      setDiffResult(collapseDiff(lines));
-      setDiffData({ commit });
-    } catch (err) {
-      console.error(err);
-      toast('error', t('common.error'));
+  const selectVersion = useCallback(async (commit: Commit) => {
+    if (isDirtyRef.current && canWriteRef.current) {
+      try { await persistOpenFile(); } catch { /* keep going; the warning toast was shown */ }
     }
-  };
+    const source = await loadCommitContent(commit.id);
+    const files = await fetchProjectFiles(commit.id);
+    const root = files.find((f) => f.isRoot) ?? files.find((f) => f.path.endsWith('.tex'));
+    setOpenPath(root ? root.path : null);
+    openIsTextRef.current = true;
+    setBinaryUrl(null);
+    markDirty(false);
+
+    const hasPdf = await loadPdf(commit.id);
+    if (hasPdf) {
+      lastCompiledRef.current = source;
+    } else if (source || files.length > 0) {
+      handleCompile(source, { files, commitId: commit.id });
+    }
+  }, [persistOpenFile, loadCommitContent, fetchProjectFiles, setBinaryUrl, markDirty, loadPdf, handleCompile]);
+
+  const versionLabel = (c: Commit | null | undefined) =>
+    !c ? '' : c.isDraft ? t('changes.title') : `v${c.revision}`;
 
   const handleDownloadPdf = () => {
     if (!pdfBlobUrl) return;
@@ -870,8 +939,7 @@ export default function DocumentEditorPage() {
       fetchAttachments();
     } catch (err: any) {
       console.error(err);
-      const message = err.response?.data?.message;
-      toast('error', message || t('editor.attachmentUploadError'));
+      toast('error', err.response?.data?.message || t('editor.attachmentUploadError'));
     } finally {
       setIsUploadingAttachment(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -914,11 +982,25 @@ export default function DocumentEditorPage() {
 
   if (!doc) return <div className="p-8 text-center text-textMuted">{t('editor.loading')}</div>;
 
-  const hasChanges = diffResult?.some((l) => l.kind === 'added' || l.kind === 'removed');
-
-  // One error per line, blank lines dropped, so the badge count matches what
-  // the panel actually lists.
   const errorLines = (compileError ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const officialCommit = commits.find((c) => c.isOfficial) ?? null;
+
+  const sidebarButton = (view: SidebarView, Icon: typeof FolderTree, label: string, badge?: number | null, accent?: boolean) => (
+    <button
+      onClick={() => setSidebarView((v) => (v === view ? 'none' : view))}
+      className={cn('btn-outline flex items-center gap-2 py-1.5 px-3 text-sm', sidebarView === view && 'bg-surface')}
+      title={label}
+    >
+      <Icon className={cn('w-4 h-4', accent && 'text-amber-600')} />
+      <span className="hidden xl:inline">{label}</span>
+      {!!badge && (
+        <span className={cn('text-[10px] font-semibold rounded-full px-1.5',
+          accent ? 'bg-amber-100 text-amber-800' : 'bg-surface text-textMuted')}>
+          {badge}
+        </span>
+      )}
+    </button>
+  );
 
   return (
     <div className="flex flex-col h-[calc(100vh-7.5rem)] -m-8">
@@ -938,47 +1020,42 @@ export default function DocumentEditorPage() {
           <DocStatusBadge status={doc.status} />
           {isLocked && (
             <span className="hidden lg:flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
-              <Lock className="w-3 h-3" /> {t('editor.readOnly')}
+              <Lock className="w-3 h-3" /> {doc.status === 'OBSOLETE' ? t('editor.obsoleteReadOnly') : t('editor.readOnly')}
+            </span>
+          )}
+          {!isLocked && recusaEditar && (
+            <span className="hidden lg:flex items-center gap-1.5 text-xs text-textMuted bg-surface border border-borderLight rounded-full px-2.5 py-1" title={t(recusaEditar)}>
+              <Eye className="w-3 h-3" /> {t('docs.openReadOnly')}
+            </span>
+          )}
+          {/* Autosave state — the draft is where the work lives. */}
+          {!isLocked && !recusaEditar && !viewingOld && (
+            <span className={cn('hidden md:flex items-center gap-1.5 text-[11px] rounded-full px-2 py-0.5 whitespace-nowrap',
+              saveState === 'error' ? 'text-red-700 bg-red-50' : 'text-textMuted bg-surface')}>
+              {saveState === 'saving' ? <Loader2 className="w-3 h-3 animate-spin" />
+                : saveState === 'dirty' ? <CloudOff className="w-3 h-3" />
+                : saveState === 'error' ? <AlertTriangle className="w-3 h-3" />
+                : <Cloud className="w-3 h-3" />}
+              {saveState === 'saving' ? t('editor.autosaveSaving')
+                : saveState === 'dirty' ? t('editor.unsaved')
+                : saveState === 'error' ? t('editor.autosaveError')
+                : lastSavedAt ? t('editor.autosaveSavedAt').replace('{time}', lastSavedAt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }))
+                : draft ? t('editor.autosaveDraft') : t('editor.autosaveClean')}
             </span>
           )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => setSidebarView((v) => (v === 'files' ? 'none' : 'files'))}
-            className={cn('btn-outline flex items-center gap-2 py-1.5 px-3 text-sm', sidebarView === 'files' && 'bg-surface')}
-          >
-            <FolderTree className="w-4 h-4" />
-            <span className="hidden xl:inline">{t('tree.title')}</span>
-            {projectFiles.length > 0 && (
-              <span className="text-[10px] font-semibold bg-surface text-textMuted rounded-full px-1.5">
-                {projectFiles.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setSidebarView((v) => (v === 'history' ? 'none' : 'history'))}
-            className={cn('btn-outline flex items-center gap-2 py-1.5 px-3 text-sm', showHistory && 'bg-surface')}
-          >
-            <History className="w-4 h-4" />
-            <span className="hidden xl:inline">{t('editor.history')}</span>
-          </button>
-          <button
-            onClick={() => setSidebarView((v) => (v === 'attachments' ? 'none' : 'attachments'))}
-            className={cn('btn-outline flex items-center gap-2 py-1.5 px-3 text-sm', sidebarView === 'attachments' && 'bg-surface')}
-          >
-            <Paperclip className="w-4 h-4" />
-            <span className="hidden xl:inline">{t('editor.attachments')}</span>
-          </button>
-          {/* Desativado com o motivo, nunca escondido: quem não pode gravar
-              precisa de saber que é falta de papel ou de setor, e não que a
-              função não existe. */}
+          {sidebarButton('files', FolderTree, t('tree.title'), projectFiles.length || null)}
+          {sidebarButton('changes', GitBranch, t('changes.title'), changedFileCount || null, changedFileCount > 0)}
+          {sidebarButton('history', History, t('editor.history'), closedCommits.length || null)}
+          {sidebarButton('attachments', Paperclip, t('editor.attachments'))}
           <button
             onClick={() => { setCommitMessage(''); setSaveModalOpen(true); }}
-            disabled={isSaving || isLocked || !!recusaEditar}
-            title={recusaEditar ? t(recusaEditar) : undefined}
+            disabled={isSaving || !canWrite || (!draft && !isDirtyRef.current)}
+            title={recusaEditar ? t(recusaEditar) : (!draft && saveState !== 'dirty') ? t('changes.nothingToSave') : t('editor.saveDraft')}
             className={cn('btn-outline flex items-center gap-2 py-1.5 px-3 text-sm',
-                          recusaEditar && 'opacity-50 cursor-not-allowed')}
+                          (recusaEditar || !canWrite) && 'opacity-50 cursor-not-allowed')}
           >
             <Save className="w-4 h-4" />
             <span className="hidden xl:inline">{isSaving ? t('editor.saving') : t('editor.saveDraft')}</span>
@@ -992,8 +1069,6 @@ export default function DocumentEditorPage() {
             <Play className="w-4 h-4" />
             <span className="hidden xl:inline">{isCompiling ? t('editor.compiling') : t('editor.compile')}</span>
           </button>
-          {/* Submeter é uma escrita: passa a gravar a versão antes de enviar,
-              por isso segue a mesma regra de edição. */}
           <button
             onClick={() => setSubmitModalOpen(true)}
             disabled={isLocked || !!recusaEditar}
@@ -1007,18 +1082,56 @@ export default function DocumentEditorPage() {
         </div>
       </div>
 
-      {/* ISO compliance banners: overdue periodic review (8.3.2 b) and pending
-          read acknowledgement (8.3.2 d). Shown above the editor because both are
-          things the user must act on, not passive status. */}
+      {/* Banners the user must act on */}
+      {doc.status === 'IN_REVIEW' && openReview && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between gap-3 shrink-0">
+          <span className="flex items-center gap-2 text-sm text-amber-800 min-w-0">
+            <Lock className="w-4 h-4 shrink-0" />
+            <span className="truncate">
+              {t('editor.inReviewBanner').replace('{title}', openReview.title).replace('{who}', openReview.requestedByName)}
+            </span>
+          </span>
+          <div className="flex items-center gap-3 shrink-0">
+            {!recusaAprovar && (
+              <button onClick={() => navigate('/dashboard/reviews')} className="text-sm font-medium text-amber-900 hover:underline">
+                {t('editor.goDecide')}
+              </button>
+            )}
+            {!recusaEditar && (
+              <button onClick={() => setWithdrawOpen(true)} className="text-sm font-medium text-amber-900 hover:underline">
+                {t('editor.withdrawReview')}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {viewingOld && selectedCommit && (
+        <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 flex items-center justify-between gap-3 shrink-0">
+          <span className="flex items-center gap-2 text-sm text-blue-800">
+            <History className="w-4 h-4 shrink-0" />
+            {t('editor.viewingVersionBanner').replace('{v}', versionLabel(selectedCommit)).replace('{date}', formatDate(selectedCommit.createdAt, lang))}
+          </span>
+          <div className="flex items-center gap-3 shrink-0">
+            <button onClick={() => setDiffModal({ to: selectedCommit.id, caption: `${versionLabel(selectedCommit)} — ${t('diff.againstPrevious')}` })}
+                    className="text-sm font-medium text-blue-900 hover:underline flex items-center gap-1">
+              <Diff className="w-3.5 h-3.5" /> {t('editor.diff')}
+            </button>
+            <button onClick={() => { const head = commits[0]; if (head) selectVersion(head); }}
+                    className="text-sm font-medium text-blue-900 hover:underline">
+              {t('editor.backToLatest')}
+            </button>
+          </div>
+        </div>
+      )}
+
       {doc?.reviewOverdue && (
         <div className="bg-red-50 border-b border-red-200 px-4 py-2.5 flex items-center justify-between gap-3 shrink-0">
           <span className="flex items-center gap-2 text-sm text-red-800">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <strong>{t('review.overdue')}</strong>
             {doc.nextReviewDate && (
-              <span className="text-red-700">
-                — {t('review.nextReview')}: {formatDate(doc.nextReviewDate, lang)}
-              </span>
+              <span className="text-red-700">— {t('review.nextReview')}: {formatDate(doc.nextReviewDate, lang)}</span>
             )}
           </span>
           <button onClick={() => setPeriodicModalOpen(true)}
@@ -1030,22 +1143,15 @@ export default function DocumentEditorPage() {
 
       {ackStatus?.required && (
         <div className={cn('border-b px-4 py-2.5 flex items-center justify-between gap-3 shrink-0',
-                           ackStatus.acknowledged
-                             ? 'bg-green-50 border-green-200'
-                             : 'bg-amber-50 border-amber-200')}>
-          <span className={cn('flex items-center gap-2 text-sm',
-                              ackStatus.acknowledged ? 'text-green-800' : 'text-amber-800')}>
+                           ackStatus.acknowledged ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200')}>
+          <span className={cn('flex items-center gap-2 text-sm', ackStatus.acknowledged ? 'text-green-800' : 'text-amber-800')}>
+            {ackStatus.acknowledged ? <BadgeCheck className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
             {ackStatus.acknowledged
-              ? <BadgeCheck className="w-4 h-4 shrink-0" />
-              : <AlertTriangle className="w-4 h-4 shrink-0" />}
-            {ackStatus.acknowledged
-              ? t('ack.confirmed').replace('{date}',
-                  ackStatus.acknowledgedAt ? formatDate(ackStatus.acknowledgedAt, lang) : '')
+              ? t('ack.confirmed').replace('{date}', ackStatus.acknowledgedAt ? formatDate(ackStatus.acknowledgedAt, lang) : '')
               : t('ack.banner')}
           </span>
           {!ackStatus.acknowledged && (
-            <button onClick={handleAcknowledge}
-                    className="btn-primary py-1 px-3 text-sm whitespace-nowrap">
+            <button onClick={handleAcknowledge} className="btn-primary py-1 px-3 text-sm whitespace-nowrap">
               {t('ack.confirm')}
             </button>
           )}
@@ -1060,19 +1166,17 @@ export default function DocumentEditorPage() {
             <FileTree
               files={projectFiles}
               selectedPath={openPath}
-              // Also read-only while an OLD version is selected: the server
-              // applies writes to the editable version, not the one on screen,
-              // so a delete here would silently change a different revision.
-              readOnly={isLocked || (!!commits[0] && selectedCommitId !== commits[0].id)}
+              readOnly={!canWrite}
               onSelect={openFile}
               onUpload={handleUploadProjectFile}
-              onImportZip={handleImportZip}
+              onImportZip={handleZipEscolhido}
               onExportZip={handleExportZip}
               onCreateFile={async (path) => {
                 if (!selectedCommitId) return;
                 try {
-                  await api.put(`/documents/${id}/files/content`, { path, content: '' });
-                  const list = await fetchProjectFiles(selectedCommitId);
+                  const res = await api.put(`/documents/${id}/files/content`, { path, content: '' });
+                  await afterWrite(res.headers?.['x-working-commit']);
+                  const list = await fetchProjectFiles(selectedCommitIdRef.current!);
                   const created = list.find((f) => f.path === path);
                   if (created) await openFile(created);
                 } catch (err: any) {
@@ -1082,9 +1186,10 @@ export default function DocumentEditorPage() {
               onRename={async (from, to) => {
                 if (!selectedCommitId) return;
                 try {
-                  await api.post(`/documents/${id}/files/rename`, { from, to });
+                  const res = await api.post(`/documents/${id}/files/rename`, { from, to });
                   if (openPath === from) setOpenPath(to);
-                  await refreshTree();
+                  await afterWrite(res.data?.workingCommit);
+                  lastCompiledRef.current = null;
                 } catch (err: any) {
                   toast('error', err.response?.data?.message || t('tree.renameError'));
                 }
@@ -1093,9 +1198,10 @@ export default function DocumentEditorPage() {
                 if (!selectedCommitId) return;
                 if (!window.confirm(t('tree.deleteConfirm').replace('{name}', path))) return;
                 try {
-                  await api.delete(`/documents/${id}/files`, { params: { path } });
+                  const res = await api.delete(`/documents/${id}/files`, { params: { path } });
                   if (openPath === path) { setOpenPath(null); setContent(''); contentRef.current = ''; }
-                  await refreshTree();
+                  await afterWrite(res.headers?.['x-working-commit']);
+                  lastCompiledRef.current = null;
                 } catch (err: any) {
                   toast('error', err.response?.data?.message || t('tree.deleteError'));
                 }
@@ -1103,10 +1209,8 @@ export default function DocumentEditorPage() {
               onSetRoot={async (path) => {
                 if (!selectedCommitId) return;
                 try {
-                  // path is a query parameter here, not a body — sending it as
-                  // JSON would make Spring reject the request with 400.
-                  await api.post(`/documents/${id}/files/root`, null, { params: { path } });
-                  await refreshTree();
+                  const res = await api.post(`/documents/${id}/files/root`, null, { params: { path } });
+                  await afterWrite(res.headers?.['x-working-commit']);
                   toast('info', t('tree.rootChanged'));
                   lastCompiledRef.current = null;
                   handleCompile();
@@ -1118,113 +1222,224 @@ export default function DocumentEditorPage() {
           </div>
         )}
 
-        {/* Version History Sidebar */}
-        {showHistory && (
-          <div className="w-72 border-r border-borderLight bg-surface overflow-y-auto flex flex-col shrink-0">
+        {/* Changes (GitHub Desktop "Changes" tab): what the draft alters, and the commit box */}
+        {sidebarView === 'changes' && (
+          <div className="w-80 border-r border-borderLight bg-surface flex flex-col shrink-0">
+            <div className="p-3 border-b border-borderLight font-semibold text-sm flex justify-between items-center">
+              <span className="flex items-center gap-2">
+                <GitBranch className="w-4 h-4 text-primary" />
+                {t('changes.title')}
+                {changedFileCount > 0 && (
+                  <span className="text-[10px] font-semibold bg-amber-100 text-amber-800 rounded-full px-1.5">{changedFileCount}</span>
+                )}
+              </span>
+              <button onClick={() => setSidebarView('none')} className="text-textMuted hover:text-textMain text-xs">{t('common.close')}</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {!draft ? (
+                <div className="p-4 text-xs text-textMuted text-center space-y-2">
+                  <CheckCircle className="w-8 h-8 mx-auto opacity-30" />
+                  <p>{t('changes.none')}</p>
+                  {closedCommits[0] && (
+                    <p className="text-[11px]">
+                      {t('changes.lastVersion').replace('{v}', `v${closedCommits[0].revision}`).replace('{date}', formatDate(closedCommits[0].createdAt, lang))}
+                    </p>
+                  )}
+                </div>
+              ) : !workingDiff ? (
+                <p className="p-4 text-xs text-textMuted text-center">{t('common.loading')}</p>
+              ) : changedFileCount === 0 ? (
+                <div className="p-4 text-xs text-textMuted text-center space-y-2">
+                  <p>{t('changes.draftIdentical')}</p>
+                  <button onClick={() => setDiscardOpen(true)} className="text-primary hover:underline text-xs">{t('changes.discard')}</button>
+                </div>
+              ) : (
+                <>
+                  <div className="px-3 py-2 text-[11px] text-textMuted flex items-center justify-between border-b border-borderLight">
+                    <span>{t('changes.vsLast').replace('{v}', closedCommits[0] ? `v${closedCommits[0].revision}` : '—')}</span>
+                    <DiffStat additions={workingDiff.additions} deletions={workingDiff.deletions} />
+                  </div>
+                  <ul className="divide-y divide-borderLight">
+                    {workingDiff.changes.filter((c) => c.status !== 'UNCHANGED')
+                      .sort((a, b) => a.path.localeCompare(b.path))
+                      .map((c) => (
+                        <li key={c.path}>
+                          <button
+                            onClick={() => setDiffModal({ to: draft.id, caption: t('changes.title'), initialPath: c.path })}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-elevated text-xs"
+                            title={t('diff.openFile')}
+                          >
+                            <span className={cn('font-mono font-bold w-3 shrink-0',
+                              c.status === 'ADDED' ? 'text-green-700' : c.status === 'REMOVED' ? 'text-red-700' : 'text-amber-700')}>
+                              {c.status === 'ADDED' ? 'A' : c.status === 'REMOVED' ? 'D' : 'M'}
+                            </span>
+                            <span className={cn('font-mono truncate flex-1', c.status === 'REMOVED' && 'line-through decoration-red-300')} title={c.path}>{c.path}</span>
+                            {c.isText ? <DiffStat additions={c.additions} deletions={c.deletions} /> : <span className="text-[10px] text-textMuted">bin</span>}
+                          </button>
+                        </li>
+                      ))}
+                  </ul>
+                  <div className="px-3 py-2">
+                    <button
+                      onClick={() => setDiffModal({ to: draft.id, caption: t('changes.title') })}
+                      className="text-xs text-primary hover:underline flex items-center gap-1"
+                    >
+                      <Diff className="w-3.5 h-3.5" /> {t('changes.viewAll')}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Commit box */}
+            {draft && canWrite && (
+              <form
+                className="p-3 border-t border-borderLight bg-elevated space-y-2"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const ok = await saveVersion(commitMessage, changeReason);
+                  if (ok) { setCommitMessage(''); setChangeReason(''); }
+                }}
+              >
+                <input
+                  type="text"
+                  value={commitMessage}
+                  onChange={(e) => setCommitMessage(e.target.value)}
+                  className="input-field text-sm py-1.5"
+                  placeholder={t('editor.commitMessagePlaceholder')}
+                  maxLength={255}
+                />
+                <textarea
+                  value={changeReason}
+                  onChange={(e) => setChangeReason(e.target.value)}
+                  rows={2}
+                  className="input-field text-sm py-1.5 resize-none"
+                  placeholder={t('editor.changeReasonPlaceholder')}
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="submit"
+                    disabled={isSaving || !commitMessage.trim() || !changeReason.trim() || changedFileCount === 0}
+                    className="btn-primary flex-1 py-1.5 text-sm flex items-center justify-center gap-2"
+                  >
+                    <GitCommitHorizontal className="w-4 h-4" />
+                    {isSaving ? t('editor.saving') : t('changes.commit').replace('{n}', String(changedFileCount))}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDiscardOpen(true)}
+                    title={t('changes.discard')}
+                    className="p-2 rounded-md text-textMuted hover:text-red-600 hover:bg-red-50"
+                  >
+                    <Undo2 className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-[10px] text-textMuted">{t('changes.commitHint')}</p>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* Version History (GitHub Desktop "History" tab) */}
+        {sidebarView === 'history' && (
+          <div className="w-80 border-r border-borderLight bg-surface overflow-y-auto flex flex-col shrink-0">
             <div className="p-3 border-b border-borderLight font-semibold text-sm flex justify-between items-center sticky top-0 bg-surface z-10">
               <span className="flex items-center gap-2">
                 <GitCommitHorizontal className="w-4 h-4 text-primary" />
                 {t('editor.commitHistory')}
+                <span className="text-[10px] font-semibold bg-elevated border border-borderLight text-textMuted rounded-full px-1.5">{closedCommits.length}</span>
               </span>
               <button onClick={() => setSidebarView('none')} className="text-textMuted hover:text-textMain text-xs">
                 {t('common.close')}
               </button>
             </div>
-            <div className="flex-1 divide-y divide-borderLight">
-              {commits.map((commit, idx) => (
-                <div
-                  key={commit.id}
-                  className={cn(
-                    'p-3 cursor-pointer group transition-colors',
-                    selectedCommitId === commit.id ? 'bg-blue-50 border-l-2 border-primary' : 'hover:bg-gray-50'
-                  )}
-                  onClick={async () => {
-                    const source = await loadCommitContent(commit.id);
-                    // Load THAT version's tree too. Without this the panel kept
-                    // showing the latest version's files while the selected
-                    // version was an older one, so clicking a file that did not
-                    // exist back then failed, and every size and badge shown
-                    // described the wrong revision.
-                    const files = await fetchProjectFiles(commit.id);
-                    const root = files.find((f) => f.isRoot) ?? files.find((f) => f.path.endsWith('.tex'));
-                    setOpenPath(root ? root.path : null);
-                    openIsTextRef.current = true;
-                    setBinaryUrl(null);
-                    markDirty(false);
 
-                    const hasPdf = await loadPdf(commit.id);
-                    if (hasPdf) {
-                      lastCompiledRef.current = source;
-                    } else if (source || files.length > 0) {
-                      handleCompile(source, { files, commitId: commit.id });
-                    }
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    {/* Revision number, GitHub-style version marker */}
-                    <span className="text-[10px] font-bold text-primary bg-blue-100 rounded px-1.5 py-0.5 shrink-0">
-                      v{commit.revision}
-                    </span>
-                    <div className="text-sm font-medium text-textMain truncate flex-1" title={commit.message}>
-                      {commit.message}
-                    </div>
-                    {doc?.officialCommitId === commit.id && (
-                      <span
-                        className="flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5 uppercase shrink-0"
-                        title={t('editor.official')}
-                      >
-                        <BadgeCheck className="w-3 h-3" /> {t('editor.official')}
-                      </span>
-                    )}
-                    {doc?.officialCommitId !== commit.id && (commit.isCurrent || idx === 0) && (
-                      <span className="text-[10px] font-semibold text-textMuted bg-surface border border-borderLight rounded-full px-2 py-0.5 uppercase shrink-0">
-                        {t('editor.current')}
-                      </span>
-                    )}
-                  </div>
-                  {commit.changeReason && (
-                    <p className="text-xs text-textMuted mt-1 italic line-clamp-2"
-                       title={commit.changeReason}>
-                      {t('editor.changeReason')}: {commit.changeReason}
-                    </p>
-                  )}
-                  <div className="text-xs text-textMuted mt-1 flex items-center gap-1.5">
-                    <span className="truncate">{commit.authorName}</span>
-                    {commit.sizeBytes > 0 && (
-                      <span className="text-textMuted/70">· {(commit.sizeBytes / 1024).toFixed(1)} KB</span>
-                    )}
-                  </div>
-                  <div className="text-xs text-textMuted">{formatDate(commit.createdAt, lang)}</div>
-                  <div className="flex items-center gap-3 mt-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleShowDiff(commit); }}
-                      className="flex items-center gap-1 text-[11px] text-primary hover:underline"
-                      title={t('editor.diff')}
-                    >
-                      <Diff className="w-3 h-3" /> {t('editor.diff')}
-                    </button>
-                    {doc?.officialCommitId !== commit.id && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setOfficialTarget(commit); }}
-                        className="flex items-center gap-1 text-[11px] text-green-700 hover:underline"
-                        title={t('editor.makeOfficial')}
-                      >
-                        <BadgeCheck className="w-3 h-3" /> {t('editor.makeOfficial')}
-                      </button>
-                    )}
-                    {!isLocked && !commit.isCurrent && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setRestoreTarget(commit); }}
-                        className="flex items-center gap-1 text-[11px] text-amber-700 hover:underline"
-                        title={t('editor.restore')}
-                      >
-                        <RotateCcw className="w-3 h-3" /> {t('editor.restore')}
-                      </button>
-                    )}
-                  </div>
+            {draft && (
+              <button
+                onClick={() => { setSidebarView('changes'); }}
+                className={cn('text-left p-3 border-b border-borderLight border-l-2 hover:bg-elevated',
+                  selectedCommitId === draft.id ? 'border-l-amber-500 bg-amber-50/40' : 'border-l-transparent')}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-amber-800 bg-amber-100 rounded px-1.5 py-0.5 shrink-0 uppercase">{t('changes.badge')}</span>
+                  <span className="text-sm font-medium text-textMain truncate flex-1">{t('changes.title')}</span>
+                  {changedFileCount > 0 && <span className="text-[11px] text-textMuted">{t('diff.filesChanged').replace('{n}', String(changedFileCount))}</span>}
                 </div>
-              ))}
-              {commits.length === 0 && (
+                <div className="text-xs text-textMuted mt-1">{t('changes.historyHint')}</div>
+              </button>
+            )}
+
+            <div className="flex-1 divide-y divide-borderLight">
+              {closedCommits.map((commit) => {
+                const active = selectedCommitId === commit.id;
+                return (
+                  <div
+                    key={commit.id}
+                    className={cn('p-3 cursor-pointer group transition-colors border-l-2',
+                      active ? 'bg-blue-50 border-l-primary' : 'border-l-transparent hover:bg-elevated')}
+                    onClick={() => selectVersion(commit)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-primary bg-blue-100 rounded px-1.5 py-0.5 shrink-0">v{commit.revision}</span>
+                      <div className="text-sm font-medium text-textMain truncate flex-1" title={commit.message}>{commit.message}</div>
+                      {commit.isOfficial && (
+                        <span className="flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5 uppercase shrink-0" title={t('editor.official')}>
+                          <BadgeCheck className="w-3 h-3" /> {t('editor.official')}
+                        </span>
+                      )}
+                      {!commit.isOfficial && commit.id === closedCommits[0]?.id && (
+                        <span className="text-[10px] font-semibold text-textMuted bg-elevated border border-borderLight rounded-full px-2 py-0.5 uppercase shrink-0">{t('editor.current')}</span>
+                      )}
+                    </div>
+                    {commit.changeReason && (
+                      <p className="text-xs text-textMuted mt-1 italic line-clamp-2" title={commit.changeReason}>
+                        {t('editor.changeReason')}: {commit.changeReason}
+                      </p>
+                    )}
+                    <div className="text-xs text-textMuted mt-1 flex items-center gap-1.5">
+                      <span className="truncate">{commit.authorName}</span>
+                      <span className="text-textMuted/70">· {formatDate(commit.createdAt, lang)}</span>
+                    </div>
+                    <div className="text-[11px] text-textMuted/80 mt-0.5">
+                      {t('editor.treeSummary').replace('{n}', String(commit.fileCount)).replace('{size}', formatFileSize(commit.treeBytes))}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setDiffModal({ to: commit.id, caption: `v${commit.revision} — ${t('diff.againstPrevious')}` }); }}
+                        className="flex items-center gap-1 text-[11px] text-primary hover:underline"
+                      >
+                        <Diff className="w-3 h-3" /> {t('editor.diff')}
+                      </button>
+                      {officialCommit && !commit.isOfficial && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDiffModal({ from: officialCommit.id, to: commit.id, caption: `v${commit.revision} — ${t('diff.againstOfficial')} (v${officialCommit.revision})` }); }}
+                          className="flex items-center gap-1 text-[11px] text-primary hover:underline"
+                        >
+                          <BadgeCheck className="w-3 h-3" /> {t('editor.diffOfficial')}
+                        </button>
+                      )}
+                      {!commit.isOfficial && !recusaAprovar && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setOfficialTarget(commit); }}
+                          className="flex items-center gap-1 text-[11px] text-green-700 hover:underline"
+                        >
+                          <BadgeCheck className="w-3 h-3" /> {t('editor.makeOfficial')}
+                        </button>
+                      )}
+                      {!isLocked && !recusaEditar && commit.id !== closedCommits[0]?.id && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setRestoreTarget(commit); }}
+                          className="flex items-center gap-1 text-[11px] text-amber-700 hover:underline"
+                        >
+                          <RotateCcw className="w-3 h-3" /> {t('editor.restore')}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {closedCommits.length === 0 && (
                 <div className="p-4 text-xs text-center text-textMuted">{t('editor.noCommits')}</div>
               )}
             </div>
@@ -1244,7 +1459,7 @@ export default function DocumentEditorPage() {
               </button>
             </div>
 
-            {!isLocked && (
+            {!isLocked && !recusaEditar && (
               <div className="p-3 border-b border-borderLight">
                 <input
                   ref={fileInputRef}
@@ -1271,24 +1486,16 @@ export default function DocumentEditorPage() {
                     <FileIcon className="w-4 h-4 text-textMuted shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium text-textMain truncate" title={a.fileName}>{a.fileName}</div>
-                      <div className="text-xs text-textMuted mt-0.5">
-                        {formatFileSize(a.sizeBytes)} · {a.uploadedByName}
-                      </div>
+                      <div className="text-xs text-textMuted mt-0.5">{formatFileSize(a.sizeBytes)} · {a.uploadedByName}</div>
                       <div className="text-xs text-textMuted">{formatDate(a.uploadedAt, lang)}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 mt-1.5 pl-6 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => handleDownloadAttachment(a)}
-                      className="flex items-center gap-1 text-[11px] text-primary hover:underline"
-                    >
+                    <button onClick={() => handleDownloadAttachment(a)} className="flex items-center gap-1 text-[11px] text-primary hover:underline">
                       <Download className="w-3 h-3" /> {t('editor.attachmentDownload')}
                     </button>
-                    {!isLocked && (
-                      <button
-                        onClick={() => setAttachmentToDelete(a)}
-                        className="flex items-center gap-1 text-[11px] text-red-600 hover:underline"
-                      >
+                    {!isLocked && !recusaEditar && (
+                      <button onClick={() => setAttachmentToDelete(a)} className="flex items-center gap-1 text-[11px] text-red-600 hover:underline">
                         <Trash2 className="w-3 h-3" /> {t('common.delete')}
                       </button>
                     )}
@@ -1305,45 +1512,27 @@ export default function DocumentEditorPage() {
         {/* Code Editor */}
         <div className="flex-1 border-r border-borderLight flex flex-col bg-white min-w-0">
           <div className="bg-surface px-4 py-2 border-b border-borderLight text-xs font-medium text-textMuted uppercase tracking-wider flex justify-between items-center">
-            {/* The open file's path replaces the generic "source" label: in a
-                42-file project, knowing which file you are editing matters more. */}
             <span className="truncate normal-case font-mono text-[11px]" title={openPath ?? undefined}>
               {openPath ?? t('editor.source')}
             </span>
-            {selectedCommitId && commits[0] && selectedCommitId !== commits[0].id && (
+            {viewingOld && (
               <span className="text-amber-600 normal-case font-normal shrink-0 ml-2">{t('editor.viewingOldVersion')}</span>
             )}
           </div>
           <div className="flex-1 overflow-auto">
             {binaryPreviewUrl ? (
-              // A binary file opened from the tree: show it instead of dumping
-              // bytes into a text editor. Branching on the type matters because
-              // converted EPS figures are stored as PDF — the headline artefact
-              // of this feature — and <img> renders those as a broken icon.
               <div className="h-full flex flex-col items-center justify-center gap-3 p-4 bg-surface">
                 {binaryPreviewType.startsWith('image/') ? (
-                  <img
-                    src={binaryPreviewUrl}
-                    alt={openPath ?? ''}
-                    className="max-w-full max-h-[80%] object-contain border border-borderLight rounded bg-white"
-                  />
+                  <img src={binaryPreviewUrl} alt={openPath ?? ''} className="max-w-full max-h-[80%] object-contain border border-borderLight rounded bg-white" />
                 ) : binaryPreviewType === 'application/pdf' ? (
-                  <iframe
-                    src={binaryPreviewUrl}
-                    title={openPath ?? 'PDF'}
-                    className="w-full h-[85%] border border-borderLight rounded bg-white"
-                  />
+                  <iframe src={binaryPreviewUrl} title={openPath ?? 'PDF'} className="w-full h-[85%] border border-borderLight rounded bg-white" />
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-textMuted">
                     <FileIcon className="w-10 h-10" />
                     <span className="text-sm font-mono">{openPath}</span>
                   </div>
                 )}
-                <a
-                  href={binaryPreviewUrl}
-                  download={openPath?.split('/').pop()}
-                  className="text-xs text-primary hover:underline flex items-center gap-1"
-                >
+                <a href={binaryPreviewUrl} download={openPath?.split('/').pop()} className="text-xs text-primary hover:underline flex items-center gap-1">
                   <Download className="w-3.5 h-3.5" /> {t('tree.downloadFile')}
                 </a>
               </div>
@@ -1355,7 +1544,8 @@ export default function DocumentEditorPage() {
                 onChange={(value) => { setContent(value); markDirty(true); }}
                 className="text-sm h-full"
                 theme="light"
-                readOnly={isLocked}
+                readOnly={!canWrite}
+                editable={canWrite}
               />
             )}
           </div>
@@ -1367,16 +1557,10 @@ export default function DocumentEditorPage() {
             <span>{t('editor.preview')}</span>
             <div className="flex items-center gap-3">
               {isCompiling && <span className="text-primary animate-pulse normal-case">{t('editor.building')}</span>}
-
-              {/* The "corner that tells you there are errors". Compact by
-                  default; the details open only when asked for. */}
               {compileError && !isCompiling && (
                 <button
                   onClick={() => setErrorsOpen((v) => !v)}
-                  className={cn(
-                    'flex items-center gap-1.5 normal-case rounded px-2 py-0.5 border transition-colors',
-                    'bg-red-50 border-red-200 text-red-700 hover:bg-red-100',
-                  )}
+                  className="flex items-center gap-1.5 normal-case rounded px-2 py-0.5 border transition-colors bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
                   aria-expanded={errorsOpen}
                 >
                   <AlertTriangle className="w-3.5 h-3.5" />
@@ -1384,17 +1568,9 @@ export default function DocumentEditorPage() {
                   {errorsOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                 </button>
               )}
-
               {pdfBlobUrl && (
                 <button
-                  onClick={() => {
-                    // Asking for the paged view again is also asking to retry it:
-                    // the previous failure may have been the compile before this
-                    // one, and refusing to try would strand the reader on the
-                    // fallback forever.
-                    if (!showPaged) setViewerError(null);
-                    setPagedView(!showPaged);
-                  }}
+                  onClick={() => { if (!showPaged) setViewerError(null); setPagedView(!showPaged); }}
                   className="flex items-center gap-1 text-textMuted hover:text-primary normal-case"
                   title={t('editor.viewerToggleHint')}
                 >
@@ -1402,22 +1578,14 @@ export default function DocumentEditorPage() {
                   {showPaged ? t('editor.viewerNative') : t('editor.viewerPaged')}
                 </button>
               )}
-
               {pdfBlobUrl && (
-                <button
-                  onClick={handleDownloadPdf}
-                  className="flex items-center gap-1 text-primary hover:underline normal-case"
-                >
+                <button onClick={handleDownloadPdf} className="flex items-center gap-1 text-primary hover:underline normal-case">
                   <Download className="w-3.5 h-3.5" /> {t('editor.downloadPdf')}
                 </button>
               )}
             </div>
           </div>
 
-          {/* Details, opened from the badge. Each line that names a file and a
-              line number is clickable: in a 42-file project the error is often
-              in a file that is not even open, and hunting for it by hand is the
-              single most tedious part of fixing a build. */}
           {compileError && errorsOpen && (
             <div className="border-b border-red-200 bg-red-50 px-3 py-2 max-h-56 overflow-auto shrink-0">
               {errorLines.length > 0 ? (
@@ -1429,9 +1597,7 @@ export default function DocumentEditorPage() {
                         {at && (
                           <button
                             onClick={() => {
-                              const target = projectFiles.find(
-                                (f) => f.path === at[1] || f.path.endsWith(`/${at[1]}`),
-                              );
+                              const target = projectFiles.find((f) => f.path === at[1] || f.path.endsWith(`/${at[1]}`));
                               if (target) { setSidebarView('files'); openFile(target); }
                             }}
                             className="text-primary hover:underline mr-1"
@@ -1440,17 +1606,13 @@ export default function DocumentEditorPage() {
                             {at[1]}:{at[2]}
                           </button>
                         )}
-                        <span className="whitespace-pre-wrap break-words">
-                          {at ? line.slice(at[0].length).replace(/^:\s*/, '') : line}
-                        </span>
+                        <span className="whitespace-pre-wrap break-words">{at ? line.slice(at[0].length).replace(/^:\s*/, '') : line}</span>
                       </li>
                     );
                   })}
                 </ul>
               ) : (
-                <pre className="text-[11px] leading-4 font-mono text-red-700 whitespace-pre-wrap break-words">
-                  {compileError}
-                </pre>
+                <pre className="text-[11px] leading-4 font-mono text-red-700 whitespace-pre-wrap break-words">{compileError}</pre>
               )}
             </div>
           )}
@@ -1461,31 +1623,10 @@ export default function DocumentEditorPage() {
             </div>
           )}
 
-          {/* The PDF panel.
-
-              The browser's own viewer is the default, not a fallback. It needs no
-              worker, no module MIME type and no extra assets to fetch — so it is
-              immune to the whole class of environment problems that repeatedly
-              left this panel blank, and it brings zoom, search, print and page
-              navigation for free. The paged renderer stays available behind the
-              toggle for anyone who prefers the continuous-page look; if it ever
-              fails, it says why and the reader can switch back in one click
-              instead of being stuck looking at nothing. */}
-          {/* A failure in the paged renderer switches to the browser's viewer by
-              itself. Leaving a button for the reader to press would mean the
-              document stays unreadable until someone notices the button — the
-              fallback exists precisely for the case where nothing is showing, so
-              it has to be automatic. The stored preference is deliberately NOT
-              changed: this is a recovery, not a decision the reader made. */}
           <div
             ref={previewRef}
-            className={cn(
-              'flex-1 overflow-auto flex flex-col',
-              // A grey backdrop is what makes each page read as a sheet of
-              // paper. On white, a white page has no edge and the preview looks
-              // like text floating in the panel.
-              showPaged ? 'items-center gap-4 p-6 bg-gray-100 dark:bg-neutral-900' : 'p-0',
-            )}
+            className={cn('flex-1 overflow-auto flex flex-col',
+              showPaged ? 'items-center gap-4 p-6 bg-gray-100 dark:bg-neutral-900' : 'p-0')}
           >
             {!pdfBlobUrl ? (
               <div className="flex flex-col items-center justify-center text-textMuted h-full opacity-50">
@@ -1500,54 +1641,88 @@ export default function DocumentEditorPage() {
                     <p className="text-[11px] font-mono text-amber-800 mt-1 break-words">{viewerError}</p>
                   </div>
                 )}
-                <object
-                  data={pdfBlobUrl}
-                  type="application/pdf"
-                  className="flex-1 w-full min-h-0"
-                  aria-label={t('editor.pdfPreview')}
-                >
-                  {/* Reached only when the browser has no PDF viewer at all. */}
+                <object data={pdfBlobUrl} type="application/pdf" className="flex-1 w-full min-h-0" aria-label={t('editor.pdfPreview')}>
                   <div className="p-8 text-center text-textMuted">
                     <p>{t('editor.viewerNoNative')}</p>
-                    <button onClick={handleDownloadPdf} className="text-primary hover:underline mt-2">
-                      {t('editor.downloadPdf')}
-                    </button>
+                    <button onClick={handleDownloadPdf} className="text-primary hover:underline mt-2">{t('editor.downloadPdf')}</button>
                   </div>
                 </object>
               </>
             ) : (
-              <>
-                <PdfDocument
-                  file={pdfBlobUrl}
-                  onLoadSuccess={({ numPages }) => { setNumPages(numPages); setViewerError(null); }}
-                  // Two different failures worth telling apart: onSourceError is
-                  // the blob never arriving, onLoadError is pdf.js refusing what
-                  // arrived. Either way the reason reaches the screen — leaving
-                  // them silent is what made every cause look identical.
-                  onLoadError={(e: Error) => setViewerError(e?.message || String(e))}
-                  onSourceError={(e: Error) => setViewerError(e?.message || String(e))}
-                  loading={<div className="p-12 text-textMuted">{t('common.loading')}</div>}
-                  error={<div className="p-12 text-textMuted">{t('editor.viewerFellBack')}</div>}
-                >
-                  {Array.from({ length: numPages ?? 0 }).map((_, i) => (
-                    <div key={i} className="bg-white shadow-lg border border-gray-200 mb-4">
-                      <Page
-                        pageNumber={i + 1}
-                        renderTextLayer={false}
-                        renderAnnotationLayer={false}
-                        width={pageWidth}
-                        onRenderError={(e: Error) => setViewerError(e?.message || String(e))}
-                      />
-                    </div>
-                  ))}
-                </PdfDocument>
-              </>
+              <PdfDocument
+                file={pdfBlobUrl}
+                onLoadSuccess={({ numPages }) => { setNumPages(numPages); setViewerError(null); }}
+                onLoadError={(e: Error) => setViewerError(e?.message || String(e))}
+                onSourceError={(e: Error) => setViewerError(e?.message || String(e))}
+                loading={<div className="p-12 text-textMuted">{t('common.loading')}</div>}
+                error={<div className="p-12 text-textMuted">{t('editor.viewerFellBack')}</div>}
+              >
+                {Array.from({ length: numPages ?? 0 }).map((_, i) => (
+                  <div key={i} className="bg-white shadow-lg border border-gray-200 mb-4">
+                    <Page pageNumber={i + 1} renderTextLayer={false} renderAnnotationLayer={false} width={pageWidth}
+                          onRenderError={(e: Error) => setViewerError(e?.message || String(e))} />
+                  </div>
+                ))}
+              </PdfDocument>
             )}
           </div>
         </div>
       </div>
 
-      {/* Save (commit message) modal */}
+      {/* ZIP confirmation: what the archive would change, before anything is written */}
+      <Modal
+        isOpen={!!zipPendente}
+        onClose={() => setZipPendente(null)}
+        title={t('zip.confirmTitle')}
+        wide
+        footer={
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setZipPendente(null)} className="btn-outline py-2 px-4 text-sm">{t('common.cancel')}</button>
+            <button
+              onClick={handleImportZip}
+              disabled={isCompiling || (zipSaveAsVersion && (!zipMessage.trim() || !zipReason.trim()))}
+              className={cn('py-2 px-4 text-sm rounded-lg font-medium text-white disabled:opacity-50',
+                (zipPendente?.preview?.removed ?? 0) > 0 ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:bg-primary-dark')}
+            >
+              {zipSaveAsVersion ? t('zip.applyAndSave') : t('zip.apply')}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-textMuted">{t('zip.confirmBody')}</p>
+          {zipPendente?.root && (
+            <p className="text-xs text-textMuted">{t('tree.rootFile')}: <span className="font-mono">{zipPendente.root}</span></p>
+          )}
+          {zipPendente && (
+            <DiffViewer
+              documentId={id!}
+              precomputed={{ tree: zipPendente.preview, files: zipPendente.files }}
+              warnOnRemoval
+              height="48vh"
+              caption={t('zip.previewCaption')}
+            />
+          )}
+          <label className="flex items-start gap-2.5 cursor-pointer pt-1">
+            <input type="checkbox" checked={zipSaveAsVersion} onChange={(e) => setZipSaveAsVersion(e.target.checked)}
+                   className="mt-0.5 w-4 h-4 rounded border-borderLight text-primary focus:ring-primary" />
+            <span>
+              <span className="text-sm font-medium text-textMain">{t('zip.saveAsVersion')}</span>
+              <span className="block text-xs text-textMuted">{t('zip.saveAsVersionHint')}</span>
+            </span>
+          </label>
+          {zipSaveAsVersion && (
+            <div className="grid grid-cols-1 gap-2 pl-6">
+              <input type="text" value={zipMessage} onChange={(e) => setZipMessage(e.target.value)}
+                     className="input-field text-sm" placeholder={t('editor.commitMessagePlaceholder')} />
+              <textarea value={zipReason} onChange={(e) => setZipReason(e.target.value)} rows={2}
+                        className="input-field text-sm resize-none" placeholder={t('editor.changeReasonPlaceholder')} />
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Save version (close the draft) */}
       <Modal
         isOpen={saveModalOpen}
         onClose={() => setSaveModalOpen(false)}
@@ -1557,32 +1732,31 @@ export default function DocumentEditorPage() {
             <button onClick={() => setSaveModalOpen(false)} className="px-4 py-2 text-sm font-medium text-textMain hover:bg-gray-100 rounded-md transition-colors">
               {t('common.cancel')}
             </button>
-            <button onClick={handleSave} disabled={isSaving || !commitMessage.trim()} className="btn-primary py-2 px-4 text-sm">
+            <button onClick={handleSave} disabled={isSaving || !commitMessage.trim() || !changeReason.trim()} className="btn-primary py-2 px-4 text-sm">
               {isSaving ? t('editor.saving') : t('common.save')}
             </button>
           </>
         }
       >
+        {workingDiff && changedFileCount > 0 && (
+          <div className="mb-4 text-xs text-textMuted flex items-center gap-2">
+            <GitBranch className="w-3.5 h-3.5 text-amber-600" />
+            {t('diff.filesChanged').replace('{n}', String(changedFileCount))}
+            <DiffStat additions={workingDiff.additions} deletions={workingDiff.deletions} />
+            <button type="button" onClick={() => draft && setDiffModal({ to: draft.id, caption: t('changes.title') })} className="text-primary hover:underline ml-auto">
+              {t('changes.viewAll')}
+            </button>
+          </div>
+        )}
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-textMain">{t('editor.commitMessage')}</label>
-          <input
-            type="text"
-            value={commitMessage}
-            onChange={(e) => setCommitMessage(e.target.value)}
-            className="input-field"
-            placeholder={t('editor.commitMessagePlaceholder')}
-            autoFocus
-          />
+          <input type="text" value={commitMessage} onChange={(e) => setCommitMessage(e.target.value)} className="input-field"
+                 placeholder={t('editor.commitMessagePlaceholder')} autoFocus maxLength={255} />
         </div>
         <div className="space-y-1.5 mt-4">
           <label className="text-sm font-medium text-textMain">{t('editor.changeReason')}</label>
-          <textarea
-            value={changeReason}
-            onChange={(e) => setChangeReason(e.target.value)}
-            rows={2}
-            className="input-field resize-none"
-            placeholder={t('editor.changeReasonPlaceholder')}
-          />
+          <textarea value={changeReason} onChange={(e) => setChangeReason(e.target.value)} rows={2} className="input-field resize-none"
+                    placeholder={t('editor.changeReasonPlaceholder')} />
           <p className="text-xs text-textMuted">{t('editor.changeReasonHint')}</p>
         </div>
       </Modal>
@@ -1594,8 +1768,7 @@ export default function DocumentEditorPage() {
         title={t('review.periodicTitle')}
         footer={
           <>
-            <button onClick={() => setPeriodicModalOpen(false)}
-                    className="px-4 py-2 text-sm font-medium text-textMain hover:bg-gray-100 rounded-md transition-colors">
+            <button onClick={() => setPeriodicModalOpen(false)} className="px-4 py-2 text-sm font-medium text-textMain hover:bg-gray-100 rounded-md transition-colors">
               {t('common.cancel')}
             </button>
             <button onClick={handlePeriodicReview} disabled={isRecordingReview} className="btn-primary py-2 px-4 text-sm">
@@ -1608,52 +1781,64 @@ export default function DocumentEditorPage() {
           <p className="text-sm text-textMuted">{t('review.periodicBody')}</p>
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-textMain">{t('review.periodicNotes')}</label>
-            <textarea value={periodicNotes} onChange={(e) => setPeriodicNotes(e.target.value)}
-                      rows={2} className="input-field resize-none" />
+            <textarea value={periodicNotes} onChange={(e) => setPeriodicNotes(e.target.value)} rows={2} className="input-field resize-none" />
           </div>
         </div>
       </Modal>
 
-      {/* Submit for review modal */}
+      {/* Submit for review */}
       <Modal
         isOpen={submitModalOpen}
         onClose={() => setSubmitModalOpen(false)}
         title={t('editor.submitModalTitle')}
+        wide
         footer={
           <>
             <button onClick={() => setSubmitModalOpen(false)} className="px-4 py-2 text-sm font-medium text-textMain hover:bg-gray-100 rounded-md transition-colors">
               {t('common.cancel')}
             </button>
             <button onClick={handleSubmitReview} disabled={isSubmittingReview || !reviewTitle.trim()} className="btn-primary py-2 px-4 text-sm">
-              {t('editor.submitReview')}
+              {isSubmittingReview ? t('common.loading') : t('editor.submitReview')}
             </button>
           </>
         }
       >
         <div className="space-y-4">
           <p className="text-sm text-textMuted">{t('editor.submitModalBody')}</p>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-textMain">{t('editor.reviewTitle')}</label>
-            <input
-              type="text"
-              value={reviewTitle}
-              onChange={(e) => setReviewTitle(e.target.value)}
-              className="input-field"
-              placeholder={t('editor.reviewTitlePlaceholder')}
-              autoFocus
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-textMain">{t('editor.reviewDescription')}</label>
-            <textarea
-              value={reviewDescription}
-              onChange={(e) => setReviewDescription(e.target.value)}
-              rows={3}
-              className="input-field resize-none"
-              placeholder={t('editor.reviewDescriptionPlaceholder')}
-            />
+          {(draft || saveState === 'dirty') && (
+            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">{t('editor.submitWillSave')}</p>
+          )}
+          {/* What is being proposed: the newest version against the one in force. */}
+          {headId && doc?.officialCommitId && headId !== doc.officialCommitId && (
+            <DiffViewer documentId={id!} from={doc.officialCommitId} to={headId} height="40vh"
+                        caption={`${t('diff.title')} — ${t('diff.againstOfficial')}`} />
+          )}
+          <div className="grid grid-cols-1 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-textMain">{t('editor.reviewTitle')}</label>
+              <input type="text" value={reviewTitle} onChange={(e) => setReviewTitle(e.target.value)} className="input-field"
+                     placeholder={t('editor.reviewTitlePlaceholder')} autoFocus />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-textMain">{t('editor.reviewDescription')}</label>
+              <textarea value={reviewDescription} onChange={(e) => setReviewDescription(e.target.value)} rows={3} className="input-field resize-none"
+                        placeholder={t('editor.reviewDescriptionPlaceholder')} />
+            </div>
           </div>
         </div>
+      </Modal>
+
+      {/* Diff viewer — GitHub Desktop layout */}
+      <Modal
+        isOpen={!!diffModal}
+        onClose={() => setDiffModal(null)}
+        title={<span className="flex items-center gap-2"><Diff className="w-5 h-5 text-primary" />{t('diff.title')}</span>}
+        wide
+      >
+        {diffModal && (
+          <DiffViewer documentId={id!} from={diffModal.from} to={diffModal.to} initialPath={diffModal.initialPath}
+                      caption={diffModal.caption} height="65vh" />
+        )}
       </Modal>
 
       {/* Restore version confirmation */}
@@ -1662,7 +1847,7 @@ export default function DocumentEditorPage() {
         onClose={() => setRestoreTarget(null)}
         onConfirm={handleRestore}
         title={`${t('editor.restoreConfirmTitle')} v${restoreTarget?.revision ?? ''}`}
-        body={t('editor.restoreConfirmBody')}
+        body={draft ? `${t('editor.restoreConfirmBody')} ${t('editor.restoreReplacesDraft')}` : t('editor.restoreConfirmBody')}
         confirmLabel={t('editor.restore')}
         loading={isRestoring}
       />
@@ -1678,6 +1863,29 @@ export default function DocumentEditorPage() {
         loading={isSettingOfficial}
       />
 
+      {/* Discard working changes */}
+      <ConfirmModal
+        isOpen={discardOpen}
+        onClose={() => setDiscardOpen(false)}
+        onConfirm={handleDiscardDraft}
+        title={t('changes.discardTitle')}
+        body={t('changes.discardBody').replace('{n}', String(changedFileCount))}
+        confirmLabel={t('changes.discard')}
+        danger
+        loading={isDiscarding}
+      />
+
+      {/* Withdraw the open review request */}
+      <ConfirmModal
+        isOpen={withdrawOpen}
+        onClose={() => setWithdrawOpen(false)}
+        onConfirm={handleWithdraw}
+        title={t('editor.withdrawTitle')}
+        body={t('editor.withdrawBody')}
+        confirmLabel={t('editor.withdrawReview')}
+        danger
+      />
+
       {/* Delete attachment confirmation */}
       <ConfirmModal
         isOpen={!!attachmentToDelete}
@@ -1688,42 +1896,6 @@ export default function DocumentEditorPage() {
         confirmLabel={t('common.delete')}
         danger
       />
-
-      {/* Diff modal */}
-      <Modal
-        isOpen={!!diffData}
-        onClose={() => { setDiffData(null); setDiffResult(null); }}
-        title={`${t('editor.diffTitle')} — ${diffData?.commit.message ?? ''}`}
-        wide
-      >
-        {diffResult && hasChanges ? (
-          <pre className="text-xs font-mono leading-5 overflow-x-auto rounded-lg border border-borderLight">
-            {diffResult.map((line, i) =>
-              line.kind === 'skip' ? (
-                <div key={i} className="px-3 py-1 bg-gray-50 text-textMuted italic border-y border-borderLight">
-                  ··· {line.count} ···
-                </div>
-              ) : (
-                <div
-                  key={i}
-                  className={cn(
-                    'px-3 whitespace-pre-wrap break-all',
-                    line.kind === 'added' && 'bg-green-50 text-green-800',
-                    line.kind === 'removed' && 'bg-red-50 text-red-800 line-through decoration-red-300',
-                  )}
-                >
-                  <span className="select-none inline-block w-4 text-textMuted">
-                    {line.kind === 'added' ? '+' : line.kind === 'removed' ? '-' : ' '}
-                  </span>
-                  {line.text || ' '}
-                </div>
-              )
-            )}
-          </pre>
-        ) : (
-          <p className="text-sm text-textMuted text-center py-8">{t('editor.noDiff')}</p>
-        )}
-      </Modal>
     </div>
   );
 }

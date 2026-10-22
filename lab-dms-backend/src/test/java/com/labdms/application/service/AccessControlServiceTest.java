@@ -177,7 +177,7 @@ class AccessControlServiceTest {
         when(userRepository.findUserPermissions(userId))
                 .thenReturn(List.of("REVIEW_APPROVE", "DOCUMENT_EDIT_ALL"));
         when(documentRepository.findById(documentId)).thenReturn(Optional.of(document));
-        when(userRepository.hasGroupAccess(userId, groupId)).thenReturn(true);
+        // No hasGroupAccess stub: an administrator never reaches the sector check.
 
         assertThatCode(() -> accessControlService.assertCanApprove(userId, documentId))
                 .doesNotThrowAnyException();
@@ -192,7 +192,7 @@ class AccessControlServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser()));
         when(userRepository.findUserPermissions(userId)).thenReturn(List.of("REVIEW_APPROVE"));
         when(documentRepository.findById(documentId)).thenReturn(Optional.of(document));
-        when(userRepository.hasGroupAccess(userId, groupId)).thenReturn(true);
+        // No hasGroupAccess stub: the designated reviewer passes regardless of sector.
 
         assertThatCode(() -> accessControlService.assertCanApprove(userId, documentId))
                 .doesNotThrowAnyException();

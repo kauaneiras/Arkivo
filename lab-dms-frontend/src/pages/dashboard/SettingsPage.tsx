@@ -3,13 +3,15 @@ import api from '../../lib/api';
 import { useI18n, LANGUAGES } from '../../lib/i18n';
 import { useTheme, type Theme } from '../../lib/theme';
 import { useToast } from '../../components/ui';
-import { Globe, KeyRound, Sun, Moon, Monitor, Palette, Tags, Info, Layers } from 'lucide-react';
+import { Globe, KeyRound, Sun, Moon, Monitor, Palette, Tags, Info, Layers, HardDrive } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useSearchParams } from 'react-router-dom';
 import DocumentTypesAdmin from '../../components/DocumentTypesAdmin';
 import BrandingAdmin from '../../components/BrandingAdmin';
 import AboutPanel from '../../components/AboutPanel';
 import GroupsAdmin from '../../components/GroupsAdmin';
+import StorageAdmin from '../../components/StorageAdmin';
+import { useAuthStore } from '../../store/authStore';
 
 /**
  * Settings are split into sections rather than stacked on one page: personal
@@ -18,7 +20,7 @@ import GroupsAdmin from '../../components/GroupsAdmin';
  * organisation's logo settings to change your own password made none of them
  * easy to find. New sections slot into the list below without touching layout.
  */
-type Section = 'appearance' | 'security' | 'branding' | 'types' | 'groups' | 'about';
+type Section = 'appearance' | 'security' | 'branding' | 'types' | 'groups' | 'storage' | 'about';
 
 export default function SettingsPage() {
   const { t, lang, setLang } = useI18n();
@@ -27,9 +29,11 @@ export default function SettingsPage() {
 
   // The taxonomy panel is admin-only on the server; hiding it for everyone else
   // avoids showing a section whose every action would come back 403.
-  const me = JSON.parse(localStorage.getItem('user_info') || '{}');
-  const roles: string[] = me?.roles ?? (me?.role ? [me.role] : []);
+  const me = useAuthStore((s) => s.user);
+  const roles: string[] = me?.roles ?? [];
   const isAdmin = roles.some((r) => String(r).toUpperCase().includes('ADMIN'));
+  // An SSO account has no local password to change.
+  const isSsoAccount = me?.authProvider === 'KEYCLOAK';
 
   const [searchParams, setSearchParams] = useSearchParams();
   // The tab lives in the URL so "Manage types" can link straight to it and a
@@ -74,6 +78,7 @@ export default function SettingsPage() {
       { id: 'branding' as Section, label: t('settings.sectionBranding'), Icon: Palette },
       { id: 'types' as Section, label: t('settings.sectionTypes'), Icon: Tags },
       { id: 'groups' as Section, label: t('settings.sectionGroups'), Icon: Layers },
+      { id: 'storage' as Section, label: t('settings.sectionStorage'), Icon: HardDrive },
     ] : []),
     { id: 'about', label: t('settings.sectionAbout'), Icon: Info },
   ];
@@ -113,6 +118,7 @@ export default function SettingsPage() {
       {active === 'branding' && isAdmin && <BrandingAdmin />}
       {active === 'types' && isAdmin && <DocumentTypesAdmin />}
       {active === 'groups' && isAdmin && <GroupsAdmin />}
+      {active === 'storage' && isAdmin && <StorageAdmin />}
       {active === 'about' && <AboutPanel />}
 
       {/* Language */}
@@ -190,7 +196,16 @@ export default function SettingsPage() {
       </>)}
 
       {/* Security — change own password */}
-      {active === 'security' && (
+      {active === 'security' && isSsoAccount && (
+      <div className="card">
+        <h2 className="font-semibold text-textMain flex items-center gap-2 mb-2">
+          <KeyRound className="w-4 h-4 text-primary" />
+          {t('settings.changePassword')}
+        </h2>
+        <p className="text-sm text-textMuted">{t('settings.ssoManaged')}</p>
+      </div>
+      )}
+      {active === 'security' && !isSsoAccount && (
       <div className="card">
         <h2 className="font-semibold text-textMain flex items-center gap-2 mb-4">
           <KeyRound className="w-4 h-4 text-primary" />

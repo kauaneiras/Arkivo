@@ -10,4 +10,5 @@ import java.util.UUID;
 @Repository
 public interface CommitJpaRepository extends JpaRepository<CommitJpaEntity, UUID> {
     List<CommitJpaEntity> findByBranchIdOrderByCreatedAtDesc(UUID branchId);
+    List<CommitJpaEntity> findByDocumentIdOrderByCreatedAtDesc(UUID documentId);
 }

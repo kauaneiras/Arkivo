@@ -35,6 +35,7 @@ class DocumentServiceTest {
     @Mock AuditLogPort auditLogPort;
     @Mock NotificationService notificationService;
     @Mock DocumentTypeService documentTypeService;
+    @Mock ProjectFileService projectFiles;
 
     DocumentService documentService;
 
@@ -42,7 +43,7 @@ class DocumentServiceTest {
     void setUp() {
         documentService = new DocumentService(documentRepository, branchRepository, commitRepository,
                 contentSnapshotRepository, accessControlService, auditLogPort, notificationService,
-                documentTypeService);
+                documentTypeService, projectFiles);
     }
 
     @Test

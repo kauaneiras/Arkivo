@@ -5,7 +5,10 @@ import com.labdms.application.dto.command.CreateBranchCommand;
 import com.labdms.application.dto.command.MergeBranchCommand;
 import com.labdms.application.dto.response.BranchResponse;
 import com.labdms.application.dto.response.CommitResponse;
-import com.labdms.domain.port.in.CommitDocumentUseCase;
+import com.labdms.application.service.DocumentVisibilityService;
+import com.labdms.application.service.ProjectFileService;
+import com.labdms.application.service.VersioningService;
+import com.labdms.domain.exception.UnauthorizedAccessException;
 import com.labdms.domain.port.in.CreateBranchUseCase;
 import com.labdms.domain.port.in.MergeBranchUseCase;
 import com.labdms.infrastructure.security.UserPrincipal;
@@ -14,32 +17,51 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * The version history of a document — the "History" side of GitHub Desktop.
+ *
+ * <p>Writes go through the draft mechanism in {@link VersioningService}: a
+ * version is saved by closing the working revision, never by rewriting a
+ * version that is already in the history.
+ */
 @RestController
 @RequestMapping("/api/v1/documents/{documentId}/versioning")
 @Tag(name = "Versioning", description = "Git-like version control for documents")
 public class VersioningController {
 
-    private final CommitDocumentUseCase commitUseCase;
+    private final VersioningService versioning;
     private final CreateBranchUseCase createBranchUseCase;
     private final MergeBranchUseCase mergeBranchUseCase;
+    private final JdbcTemplate jdbcTemplate;
+    private final DocumentVisibilityService visibility;
+    private final ProjectFileService projectFiles;
 
-    public VersioningController(CommitDocumentUseCase commitUseCase, 
-                                CreateBranchUseCase createBranchUseCase, 
-                                MergeBranchUseCase mergeBranchUseCase) {
-        this.commitUseCase = commitUseCase;
+    public VersioningController(VersioningService versioning,
+                                CreateBranchUseCase createBranchUseCase,
+                                MergeBranchUseCase mergeBranchUseCase,
+                                JdbcTemplate jdbcTemplate,
+                                DocumentVisibilityService visibility,
+                                ProjectFileService projectFiles) {
+        this.versioning = versioning;
         this.createBranchUseCase = createBranchUseCase;
         this.mergeBranchUseCase = mergeBranchUseCase;
+        this.jdbcTemplate = jdbcTemplate;
+        this.visibility = visibility;
+        this.projectFiles = projectFiles;
     }
+
+    /* ------------------------------ write ------------------------------ */
 
     @PostMapping("/branches/{branchId}/commits")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Create a new commit on a branch")
+    @Operation(summary = "Save a version on a branch (closes the working draft)")
     public ResponseEntity<CommitResponse> commit(
             @PathVariable UUID documentId,
             @PathVariable UUID branchId,
@@ -48,48 +70,37 @@ public class VersioningController {
 
         CommitDocumentCommand command = new CommitDocumentCommand(
             principal.getId(), documentId, branchId,
-            request.latexSource(), request.message()
-        );
-        CommitResponse response = CommitResponse.from(commitUseCase.execute(command));
-        recordChangeReason(response.id(), request.changeReason());
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
-    /**
-     * Stores the ISO 8.3.2 c) change justification alongside the commit.
-     *
-     * <p>Written here rather than threaded through the domain command because it
-     * is compliance metadata about the revision, not something the versioning
-     * logic acts on — the commit is valid with or without it. Kept immutable
-     * afterwards: the reason belongs to that revision forever.
-     */
-    private void recordChangeReason(UUID commitId, String changeReason) {
-        if (commitId == null || changeReason == null || changeReason.isBlank()) return;
-        jdbcTemplate.update("UPDATE commits SET change_reason = ? WHERE id = ?",
-                changeReason.trim(), commitId);
+            request.latexSource(), request.message(), request.changeReason());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(CommitResponse.from(versioning.execute(command)));
     }
 
     @PostMapping("/commits")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Create a new commit on the default branch (shortcut for UI)")
+    @Operation(summary = "Save a version on the default branch (closes the working draft)")
     public ResponseEntity<CommitResponse> commitToDefault(
             @PathVariable UUID documentId,
             @Valid @RequestBody CommitDocumentRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
-        
-        // Fetch default branch ID
-        UUID branchId = jdbcTemplate.queryForObject(
-            "SELECT id FROM branches WHERE document_id = ? AND is_default = true",
-            UUID.class, documentId
-        );
 
         CommitDocumentCommand command = new CommitDocumentCommand(
-            principal.getId(), documentId, branchId,
-            request.latexSource(), request.message()
-        );
-        CommitResponse response = CommitResponse.from(commitUseCase.execute(command));
-        recordChangeReason(response.id(), request.changeReason());
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            principal.getId(), documentId, defaultBranchId(documentId),
+            request.latexSource(), request.message(), request.changeReason());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(CommitResponse.from(versioning.execute(command)));
+    }
+
+    /**
+     * "Discard changes": drops the working revision and returns to the last
+     * saved version. Nothing in the history changes.
+     */
+    @DeleteMapping("/working")
+    @Operation(summary = "Discard the working draft (unsaved changes)")
+    public ResponseEntity<Void> discardDraft(
+            @PathVariable UUID documentId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        versioning.discardDraft(documentId, principal.getId());
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/branches")
@@ -101,8 +112,7 @@ public class VersioningController {
             @AuthenticationPrincipal UserPrincipal principal) {
 
         CreateBranchCommand command = new CreateBranchCommand(
-            principal.getId(), documentId, request.branchName()
-        );
+            principal.getId(), documentId, request.branchName());
         return ResponseEntity.status(HttpStatus.CREATED)
             .body(BranchResponse.from(createBranchUseCase.execute(command)));
     }
@@ -114,82 +124,79 @@ public class VersioningController {
             @PathVariable UUID branchId,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        MergeBranchCommand command = new MergeBranchCommand(
-            principal.getId(), documentId, branchId
-        );
-        mergeBranchUseCase.execute(command);
+        mergeBranchUseCase.execute(new MergeBranchCommand(principal.getId(), documentId, branchId));
         return ResponseEntity.ok().build();
     }
 
-    // Direct JDBC queries for simple UI fetch
-    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    @PostMapping("/commits/{commitId}/restore")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Restore an older version",
+               description = "Git-style revert: creates a NEW version with the tree of the chosen one, "
+                           + "so the history stays immutable (ISO traceability). Unsaved changes in "
+                           + "the working draft are replaced.")
+    public ResponseEntity<CommitResponse> restoreCommit(
+            @PathVariable UUID documentId,
+            @PathVariable UUID commitId,
+            @RequestBody(required = false) RestoreRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
 
-    @org.springframework.beans.factory.annotation.Autowired
-    public void setJdbcTemplate(org.springframework.jdbc.core.JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
+        Integer revision = revisionOf(documentId, commitId);
+        String message = VersioningService.RESTORE_MESSAGE_PREFIX + (revision != null ? revision : "?");
+        String reason = request != null && request.changeReason() != null && !request.changeReason().isBlank()
+                ? request.changeReason().trim()
+                : "Conteúdo restaurado da versão v" + (revision != null ? revision : "?") + ".";
+
+        CommitDocumentCommand command = new CommitDocumentCommand(
+            principal.getId(), documentId, defaultBranchId(documentId), null, message, reason);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(CommitResponse.from(versioning.restore(command, commitId)));
     }
 
-    private com.labdms.application.service.DocumentVisibilityService visibility;
+    public record RestoreRequest(String changeReason) {}
 
-    @org.springframework.beans.factory.annotation.Autowired
-    public void setVisibility(com.labdms.application.service.DocumentVisibilityService visibility) {
-        this.visibility = visibility;
-    }
-
-    /**
-     * Ninguém lê a história de um documento que não pode ler.
-     *
-     * <p>Os três métodos de leitura deste controlador não recebiam sequer o
-     * utilizador: bastava saber o identificador para obter o histórico de
-     * versões e o LaTeX inteiro de qualquer documento, incluindo os restritos.
-     * A visibilidade era decidida noutro sítio e este caminho passava ao lado
-     * dela — que é o modo clássico de um controlo de acesso existir e não
-     * proteger nada.
-     *
-     * <p>Usa a mesma regra de leitura que serve o resto do sistema, em vez de
-     * uma verificação própria: duas regras paralelas divergem, e a que diverge
-     * é sempre a que ninguém está a olhar.
-     */
-    private void assertCanRead(UUID documentId, UserPrincipal principal) {
-        UUID userId = principal == null ? null : principal.getId();
-        if (!visibility.canRead(userId, documentId)) {
-            throw new com.labdms.domain.exception.UnauthorizedAccessException("view");
-        }
-    }
+    /* ------------------------------- read ------------------------------ */
 
     /**
      * A version in the document history.
      *
-     * @param revision  sequential revision number (v1 = first version), ISO-style
-     * @param isCurrent whether this is the version the document currently points to
-     * @param branchName branch this version belongs to
+     * @param revision  sequential number among CLOSED versions (v1 = first);
+     *                  0 for the working draft
+     * @param isDraft   the working revision — unsaved changes, not a version
+     * @param fileCount files in this version's tree
+     * @param treeBytes total size of this version's tree
      */
     public record CommitHistoryDto(UUID id, String message, String authorName,
                                    java.time.Instant createdAt, int revision,
-                                   boolean isCurrent, boolean isOfficial, String branchName,
-                                   UUID parentCommitId, int sizeBytes,
+                                   boolean isCurrent, boolean isOfficial, boolean isDraft,
+                                   String branchName, UUID parentCommitId,
+                                   int fileCount, long treeBytes,
                                    /** ISO 8.3.2 c) justification for this revision. */
                                    String changeReason) {}
 
     @GetMapping("/commits")
-    @Operation(summary = "Get version history for a document (newest first)")
+    @Operation(summary = "Get version history for a document (newest first)",
+               description = "The working draft, when there is one, comes first with isDraft=true "
+                           + "and revision 0; closed versions are numbered v1..vN.")
     public ResponseEntity<List<CommitHistoryDto>> getCommits(@PathVariable UUID documentId,
             @AuthenticationPrincipal UserPrincipal principal) {
         assertCanRead(documentId, principal);
 
         List<CommitHistoryDto> commits = jdbcTemplate.query("""
-            SELECT c.id, c.message, c.change_reason, u.full_name AS author_name, c.created_at,
-                   c.parent_commit_id, b.name AS branch_name, s.size_bytes,
-                   ROW_NUMBER() OVER (ORDER BY c.created_at ASC) AS revision,
+            SELECT c.id, c.message, c.change_reason, c.is_draft, u.full_name AS author_name, c.created_at,
+                   c.parent_commit_id, b.name AS branch_name,
+                   CASE WHEN c.is_draft THEN 0
+                        ELSE ROW_NUMBER() OVER (PARTITION BY c.is_draft ORDER BY c.created_at ASC) END AS revision,
                    (d.current_commit_id = c.id) AS is_current,
-                   (d.official_commit_id = c.id) AS is_official
-            FROM commits c
-            JOIN users u ON c.author_id = u.id
-            JOIN documents d ON d.id = c.document_id
-            LEFT JOIN branches b ON b.id = c.branch_id
-            LEFT JOIN content_snapshots s ON s.id = c.content_snapshot_id
-            WHERE c.document_id = ?
-            ORDER BY c.created_at DESC
+                   (d.official_commit_id = c.id) AS is_official,
+                   COALESCE(t.n, 0) AS file_count, COALESCE(t.bytes, 0) AS tree_bytes
+              FROM commits c
+              JOIN users u ON c.author_id = u.id
+              JOIN documents d ON d.id = c.document_id
+              LEFT JOIN branches b ON b.id = c.branch_id
+              LEFT JOIN (SELECT commit_id, COUNT(*) AS n, SUM(size_bytes) AS bytes
+                           FROM project_files GROUP BY commit_id) t ON t.commit_id = c.id
+             WHERE c.document_id = ?
+             ORDER BY c.is_draft DESC, c.created_at DESC
             """,
             (rs, rowNum) -> new CommitHistoryDto(
                 rs.getObject("id", UUID.class),
@@ -199,9 +206,11 @@ public class VersioningController {
                 rs.getInt("revision"),
                 rs.getBoolean("is_current"),
                 rs.getBoolean("is_official"),
+                rs.getBoolean("is_draft"),
                 rs.getString("branch_name"),
                 rs.getObject("parent_commit_id", UUID.class),
-                rs.getInt("size_bytes"),
+                rs.getInt("file_count"),
+                rs.getLong("tree_bytes"),
                 rs.getString("change_reason")
             ),
             documentId
@@ -231,63 +240,71 @@ public class VersioningController {
             documentId));
     }
 
-    @PostMapping("/commits/{commitId}/restore")
-    @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Restore an older version",
-               description = "Git-style revert: creates a NEW version with the content of the "
-                           + "chosen one, so the history stays immutable (ISO traceability)")
-    public ResponseEntity<CommitResponse> restoreCommit(
-            @PathVariable UUID documentId,
-            @PathVariable UUID commitId,
-            @AuthenticationPrincipal UserPrincipal principal) {
+    public record CommitContentDto(String content, String path) {}
 
-        // Same nullable-snapshot case as getCommitContent: a multi-file version
-        // has no single-string snapshot, and restore must still work for it —
-        // the tree is what gets restored, via commitUseCase.restore below.
-        var contentRows = jdbcTemplate.queryForList(
-            "SELECT s.latex_source FROM content_snapshots s " +
-            "JOIN commits c ON s.id = c.content_snapshot_id WHERE c.id = ? AND c.document_id = ?",
-            String.class, commitId, documentId);
-        String content = contentRows.isEmpty() ? "" : contentRows.get(0);
-
-        Integer revision = jdbcTemplate.queryForObject("""
-            SELECT revision FROM (
-                SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC) AS revision
-                FROM commits WHERE document_id = ?
-            ) t WHERE id = ?
-            """, Integer.class, documentId, commitId);
-
-        UUID branchId = jdbcTemplate.queryForObject(
-            "SELECT id FROM branches WHERE document_id = ? AND is_default = true",
-            UUID.class, documentId);
-
-        CommitDocumentCommand command = new CommitDocumentCommand(
-            principal.getId(), documentId, branchId, content,
-            "Restore version v" + (revision != null ? revision : "?"));
-
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(CommitResponse.from(commitUseCase.restore(command, commitId)));
-    }
-
-    public record CommitContentDto(String content) {}
-
+    /**
+     * The text of a version's root file.
+     *
+     * <p>Read from the TREE when the version has one. The snapshot stored with
+     * the commit is taken when the version is closed; for the working draft it
+     * would be stale the moment a file was saved — and an editor opened on the
+     * stale text would overwrite the newer file on its next save.
+     */
     @GetMapping("/commits/{commitId}/content")
-    @Operation(summary = "Get LaTeX content for a specific commit")
+    @Operation(summary = "Get the root LaTeX content for a specific version")
     public ResponseEntity<CommitContentDto> getCommitContent(
             @PathVariable UUID documentId,
             @PathVariable UUID commitId,
             @AuthenticationPrincipal UserPrincipal principal) {
         assertCanRead(documentId, principal);
+        assertBelongs(documentId, commitId);
 
-        // queryForList, not queryForObject: V9 made commits.content_snapshot_id
-        // nullable (a version can now be a file tree with no single-string
-        // snapshot), so this JOIN legitimately returns NO row — and
-        // queryForObject turns that into a 500 on a request the editor makes
-        // every time a document is opened.
+        String rootPath = projectFiles.rootPath(commitId);
+        if (rootPath != null) {
+            try {
+                return ResponseEntity.ok(new CommitContentDto(projectFiles.readTextFile(commitId, rootPath), rootPath));
+            } catch (IllegalArgumentException binaryRoot) {
+                // falls through to the snapshot
+            }
+        }
         var rows = jdbcTemplate.queryForList(
             "SELECT s.latex_source FROM content_snapshots s JOIN commits c ON s.id = c.content_snapshot_id WHERE c.id = ?",
             String.class, commitId);
-        String content = rows.isEmpty() ? "" : rows.get(0);
-        return ResponseEntity.ok(new CommitContentDto(content));
+        return ResponseEntity.ok(new CommitContentDto(rows.isEmpty() ? "" : rows.get(0), rootPath));
+    }
+
+    /* ------------------------------ helpers ---------------------------- */
+
+    private void assertCanRead(UUID documentId, UserPrincipal principal) {
+        UUID userId = principal == null ? null : principal.getId();
+        if (!visibility.canRead(userId, documentId)) {
+            throw new UnauthorizedAccessException("view");
+        }
+    }
+
+    /** A commit id in the URL must belong to the document in the URL. */
+    private void assertBelongs(UUID documentId, UUID commitId) {
+        List<UUID> owner = jdbcTemplate.queryForList(
+                "SELECT document_id FROM commits WHERE id = ?", UUID.class, commitId);
+        if (owner.isEmpty() || !documentId.equals(owner.get(0))) {
+            throw new IllegalArgumentException("This version does not belong to this document");
+        }
+    }
+
+    private UUID defaultBranchId(UUID documentId) {
+        List<UUID> ids = jdbcTemplate.queryForList(
+            "SELECT id FROM branches WHERE document_id = ? AND is_default = true", UUID.class, documentId);
+        if (ids.isEmpty()) throw new IllegalStateException("This document has no default branch");
+        return ids.get(0);
+    }
+
+    private Integer revisionOf(UUID documentId, UUID commitId) {
+        List<Integer> rows = jdbcTemplate.queryForList("""
+            SELECT revision FROM (
+                SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC) AS revision
+                  FROM commits WHERE document_id = ? AND NOT is_draft
+            ) t WHERE id = ?
+            """, Integer.class, documentId, commitId);
+        return rows.isEmpty() ? null : rows.get(0);
     }
 }

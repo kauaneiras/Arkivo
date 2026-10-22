@@ -1,0 +1,156 @@
+{
+  "realm": "lab-dms",
+  "enabled": true,
+  "displayName": "Lab DMS (desenvolvimento)",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "roles": {
+    "realm": [
+      {
+        "name": "dms-admin",
+        "description": "Administrador do Lab DMS (ROLE_ADMIN)"
+      },
+      {
+        "name": "dms-editor",
+        "description": "Editor: cria e edita documentos (ROLE_EDITOR)"
+      },
+      {
+        "name": "dms-reviewer",
+        "description": "Revisor: aprova ou devolve (ROLE_REVIEWER)"
+      },
+      {
+        "name": "dms-viewer",
+        "description": "Leitor (ROLE_VIEWER)"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "lab-dms",
+      "name": "Lab DMS (frontend)",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "rootUrl": "http://localhost:3000",
+      "baseUrl": "/",
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost:5173/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "http://localhost:5173"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/*##http://localhost:5173/*"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "groups",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin.sso@email.com",
+      "email": "admin.sso@email.com",
+      "firstName": "Administrador",
+      "lastName": "SSO",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "123456",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "dms-admin"
+      ],
+      "groups": [
+        "/Administração",
+        "/Qualidade"
+      ]
+    },
+    {
+      "username": "writer.sso@email.com",
+      "email": "writer.sso@email.com",
+      "firstName": "Escritor",
+      "lastName": "SSO",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "123456",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "dms-editor"
+      ],
+      "groups": [
+        "/Soldagem"
+      ]
+    },
+    {
+      "username": "reviewer.sso@email.com",
+      "email": "reviewer.sso@email.com",
+      "firstName": "Revisor",
+      "lastName": "SSO",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "123456",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "dms-reviewer"
+      ],
+      "groups": [
+        "/Qualidade"
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "name": "Qualidade",
+      "path": "/Qualidade"
+    },
+    {
+      "name": "Soldagem",
+      "path": "/Soldagem"
+    },
+    {
+      "name": "Administração",
+      "path": "/Administração"
+    }
+  ]
+}

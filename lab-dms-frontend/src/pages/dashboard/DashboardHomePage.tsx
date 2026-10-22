@@ -4,9 +4,11 @@ import api from '../../lib/api';
 import { useI18n, formatDate } from '../../lib/i18n';
 import { DocStatusBadge, EmptyState } from '../../components/ui';
 import {
-  FileText, GitPullRequest, Users, History, ArrowRight, Activity,
+  FileText, GitPullRequest, Users, History, ArrowRight, Activity, HardDrive,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAuthStore } from '../../store/authStore';
+import { humanBytes } from '../../components/DiffViewer';
 
 interface ActivityItem {
   userName: string | null;
@@ -38,9 +40,11 @@ const STATUS_BAR_COLORS: Record<string, string> = {
 
 export default function DashboardHomePage() {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [storage, setStorage] = useState<{ databaseBytes: number; storedBytes: number; attachmentBytes: number; dedupSavingsPercent: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { t, lang } = useI18n();
+  const isAdmin = useAuthStore((s) => s.can('ROLE_ADMIN'));
 
   useEffect(() => {
     api.get('/dashboard/stats')
@@ -49,11 +53,24 @@ export default function DashboardHomePage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Storage is an administrator's concern; the endpoint is admin-only too.
+  useEffect(() => {
+    if (!isAdmin) return;
+    api.get('/storage/overview').then((res) => setStorage(res.data)).catch(() => setStorage(null));
+  }, [isAdmin]);
+
   const cards = stats ? [
     { label: t('dashboard.totalDocuments'), value: stats.totalDocuments, icon: FileText, color: 'text-primary bg-blue-50', onClick: () => navigate('/dashboard/documents') },
     { label: t('dashboard.openReviews'), value: stats.openReviews, icon: GitPullRequest, color: 'text-amber-600 bg-amber-50', onClick: () => navigate('/dashboard/reviews') },
     { label: t('dashboard.totalCommits'), value: stats.totalCommits, icon: History, color: 'text-secondary bg-green-50' },
     { label: t('dashboard.activeUsers'), value: stats.totalUsers, icon: Users, color: 'text-violet-600 bg-violet-50', onClick: () => navigate('/dashboard/users') },
+    ...(storage ? [{
+      label: t('dashboard.storage'),
+      value: humanBytes(storage.databaseBytes + storage.attachmentBytes) as string | number,
+      hint: t('dashboard.storageHint').replace('{pct}', String(storage.dedupSavingsPercent)),
+      icon: HardDrive, color: 'text-amber-600 bg-amber-50',
+      onClick: () => navigate('/dashboard/settings?tab=storage'),
+    }] : []),
   ] : [];
 
   const maxStatus = stats ? Math.max(1, ...Object.values(stats.documentsByStatus)) : 1;
@@ -67,7 +84,7 @@ export default function DashboardHomePage() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-2 gap-4 ${cards.length > 4 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
         {loading
           ? Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="card h-24 animate-pulse bg-gray-50" />
@@ -85,9 +102,10 @@ export default function DashboardHomePage() {
                 <div className={`w-11 h-11 rounded-lg flex items-center justify-center shrink-0 ${card.color}`}>
                   <card.icon className="w-5 h-5" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-textMain leading-none">{card.value}</p>
+                <div className="min-w-0">
+                  <p className="text-2xl font-bold text-textMain leading-none truncate">{card.value}</p>
                   <p className="text-xs text-textMuted mt-1.5">{card.label}</p>
+                  {'hint' in card && card.hint && <p className="text-[10px] text-textMuted/80 mt-0.5">{card.hint}</p>}
                 </div>
               </motion.button>
             ))}

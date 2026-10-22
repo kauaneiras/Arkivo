@@ -144,6 +144,41 @@ sistema: duas regras paralelas divergem, e a que diverge é a que ninguém vê.
 
 ---
 
+## O que o ecrã mostra
+
+A regra vive no servidor, que recusa de qualquer forma. O ecrã espelha-a para
+não **oferecer** o que vai ser recusado — e para dizer porquê antes de a pessoa
+tentar. O espelho está num ficheiro só, `lib/permissoes.ts`; se cada tela
+derivasse a regra por sua conta, uma delas ficava para trás na próxima mudança.
+
+**Desativado, não escondido.** Um botão que desaparece deixa a pessoa sem saber
+se a função existe, se está no sítio errado, ou se lhe falta alguma coisa — e a
+resposta a essa dúvida custa uma pergunta a um colega. Apagado, com o motivo ao
+passar o rato, ela resolve sozinha: pedir um papel, pedir entrada num setor, ou
+perceber que escreveu o documento e por isso não o aprova.
+
+| Perfil | Aprovar | Motivo mostrado |
+|---|---|---|
+| Revisor do setor | **pode** | — |
+| Autor do documento | bloqueado | «Você escreveu este documento e por isso não pode aprová-lo» |
+| Leitor | bloqueado | «Você não tem permissão para revisar» |
+| Administrador | **pode** | — (atravessa o setor) |
+| Revisor de outro setor | bloqueado | «Você não pertence ao setor deste documento» |
+
+Gravar versão e submeter para aprovação seguem a regra de edição, e ficam
+desativados com o mesmo tipo de explicação.
+
+**A exceção é abrir o documento.** O editor é também o leitor, e desativar essa
+ação tiraria a leitura a quem tem direito a ela. Em vez de bloquear, o botão diz
+a verdade: lápis para quem edita, olho e «Abrir (somente leitura)» para quem só
+lê. Lá dentro, gravar e submeter estão desativados com o motivo.
+
+Menus de administração continuam escondidos para quem não é administrador —
+neles não há nada a explicar, e mostrar uma lista de coisas inacessíveis só
+adiciona ruído.
+
+---
+
 ## Endpoints com exigência de papel
 
 | | Rota | Exige |
@@ -158,13 +193,39 @@ sistema: duas regras paralelas divergem, e a que diverge é a que ninguém vê.
 | GET | `/api/v1/audit/actions` | `ADMIN` ou `REVIEWER` |
 | POST/PUT | `/api/v1/external-documents` | `ADMIN`, `REVIEWER` ou `EDITOR` |
 | DELETE | `/api/v1/external-documents/{id}` | `ADMIN` |
+| GET/POST | `/api/v1/storage/overview`, `/storage/documents`, `/storage/gc` | `ADMIN` |
+| GET | `/api/v1/storage/documents/{id}` | quem pode **ler** o documento |
+| DELETE | `/api/v1/documents/{id}/versioning/working` | quem pode **escrever** no documento |
+| POST | `/api/v1/reviews/{id}/withdraw` | quem pode **escrever** no documento |
+| GET | `/api/v1/documents/{id}/files/diff`, `/files/diff/file` | quem pode **ler** o documento |
 
 Sem sessão, de propósito: `POST /auth/login`, `POST /auth/register`,
+`GET /auth/config` (diz à tela de login se há SSO; não contém segredo),
 `GET /branding` (a logo aparece antes do login), e `/api/v1/public/*`, que serve
 **apenas** documentos `PUBLIC`, **apenas** a versão em vigor e **apenas** como
 PDF — nunca a árvore de ficheiros, nunca um rascunho.
 
 ---
+
+## Contas que não entram
+
+`UserPrincipal.isEnabled()` e `isAccountNonLocked()` devolviam `true` fixo:
+uma conta PENDING (à espera de aprovação), INACTIVE ou LOCKED entrava com a
+senha certa e lia todos os documentos internos — o estado só era verificado
+nas escritas. Agora só ACTIVE entra, e o filtro de autenticação recusa o token
+de uma conta desativada no mesmo instante, não quando o token expirar.
+
+`SecurityService.hasPermission()`, que devolvia `true` para tudo e não era
+usado em lado nenhum, foi removido: um método de autorização que diz sempre sim
+é um acidente à espera de uma anotação `@PreAuthorize`.
+
+## Login único (SSO)
+
+Com `SSO_ENABLED=true`, um token do Keycloak vale o mesmo que o token local em
+cada pedido. A identidade continua a ser a linha em `users` — criada na
+primeira entrada, com os papéis sincronizados a partir do token em cada entrada
+— por isso **todas as regras acima são as mesmas** para quem entra pelo SSO.
+Ver [KEYCLOAK.md](KEYCLOAK.md).
 
 ## Remoção de contas
 

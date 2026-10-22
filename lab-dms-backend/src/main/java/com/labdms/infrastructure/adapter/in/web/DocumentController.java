@@ -100,7 +100,7 @@ public class DocumentController {
                        COALESCE(g.name, '') AS group_name,
                        COALESCE(ua.full_name, '') AS author_name,
                        COALESCE(ur.full_name, '') AS reviewer_name,
-                       COALESCE((SELECT COUNT(*) FROM commits c WHERE c.document_id = d.id), 0) AS revisions,
+                       COALESCE((SELECT COUNT(*) FROM commits c WHERE c.document_id = d.id AND NOT c.is_draft), 0) AS revisions,
                        COALESCE(TO_CHAR(d.last_reviewed_at, 'YYYY-MM-DD'), '') AS last_reviewed,
                        COALESCE(TO_CHAR(d.next_review_date, 'YYYY-MM-DD'), '') AS next_review,
                        COALESCE(d.review_interval_months::text, '') AS review_interval,
@@ -223,7 +223,13 @@ public class DocumentController {
 
     @GetMapping("/{id}/visibility")
     @Operation(summary = "Who can read this document")
-    public ResponseEntity<VisibilityDto> getVisibility(@PathVariable java.util.UUID id) {
+    public ResponseEntity<VisibilityDto> getVisibility(@PathVariable java.util.UUID id,
+                                                       @AuthenticationPrincipal UserPrincipal principal) {
+        // The access list of a restricted document says who the laboratory
+        // trusts with it — not something to hand to whoever asks by id.
+        if (!visibilityService.canRead(principal == null ? null : principal.getId(), id)) {
+            throw new com.labdms.domain.exception.UnauthorizedAccessException("view");
+        }
         List<String> v = jdbcTemplate.query("SELECT visibility FROM documents WHERE id = ?",
                 (rs, n) -> rs.getString(1), id);
         if (v.isEmpty()) return ResponseEntity.notFound().build();
@@ -406,6 +412,11 @@ public class DocumentController {
             UUID assignedReviewerId, String reviewerName,
             UUID currentCommitId, UUID officialCommitId,
             boolean officialIsLatest,
+            // Unsaved work in progress (a working draft is open). Shown in the
+            // list so "where did my edits go" is answered before opening.
+            boolean hasDraft,
+            // Closed versions, excluding the draft.
+            long versionCount,
             // ISO 8.3.2 b) — surfaced in the list so an overdue review is visible
             // without opening each document.
             java.time.LocalDate nextReviewDate, boolean reviewOverdue,
@@ -470,11 +481,14 @@ public class DocumentController {
                        d.assigned_reviewer_id, ur.full_name AS reviewer_name,
                        d.current_commit_id, d.official_commit_id, d.next_review_date,
                        d.visibility,
+                       COALESCE(cc.is_draft, false) AS has_draft,
+                       (SELECT COUNT(*) FROM commits c WHERE c.document_id = d.id AND NOT c.is_draft) AS version_count,
                        d.created_at, d.updated_at
                   FROM documents d
                   LEFT JOIN document_groups g ON g.id = d.document_group_id
                   LEFT JOIN users ua ON ua.id = d.created_by
                   LEFT JOIN users ur ON ur.id = d.assigned_reviewer_id
+                  LEFT JOIN commits cc ON cc.id = d.current_commit_id
                 """ + where + " ORDER BY d.updated_at DESC LIMIT ? OFFSET ?",
                 (rs, rowNum) -> {
                     UUID current = rs.getObject("current_commit_id", UUID.class);
@@ -495,6 +509,8 @@ public class DocumentController {
                             current,
                             official,
                             official == null || official.equals(current),
+                            rs.getBoolean("has_draft"),
+                            rs.getLong("version_count"),
                             nextReview,
                             nextReview != null && nextReview.isBefore(java.time.LocalDate.now()),
                             rs.getString("visibility"),

@@ -1,6 +1,6 @@
 # O banco de dados
 
-PostgreSQL 16, esquema versionado com Flyway. **25 tabelas em 15 migrações.**
+PostgreSQL 16, esquema versionado com Flyway. **25 tabelas em 16 migrações.**
 
 Este documento explica não só o que existe, mas **por que** cada decisão foi
 tomada — que é o que falta quando alguém pega um esquema alheio e tenta mudá-lo
@@ -38,6 +38,16 @@ diretamente.
 
 **O custo disso é resolvido pela dedução por hash** (ver `file_blobs`): guardar a
 árvore inteira só é caro se os bytes forem duplicados, e eles não são.
+
+### 1b. O rascunho é a única linha gravável de `commits`
+
+`commits.is_draft` (V16) marca a **área de trabalho**: o commit que nasce na
+primeira edição depois de uma gravação, copiando a árvore da cabeça, e que
+recebe todas as escritas até "Salvar versão" o fechar (mensagem, motivo, autor,
+data; `is_draft = false`). Há no máximo um por documento — índice único parcial
+`uk_commits_one_draft_per_document`. Tudo o que está `is_draft = false` é
+imutável: nenhum endpoint escreve nele. É o que faz "v3" significar sempre o
+mesmo conteúdo. Detalhes em [VERSIONAMENTO.md](VERSIONAMENTO.md).
 
 ### 2. "Versão atual" e "versão em vigor" são coisas diferentes
 
@@ -92,7 +102,7 @@ tivesse FK com CASCADE, apagar um documento apagaria a prova de que ele existiu.
 
 | Tabela | Papel | Migração |
 |---|---|---|
-| `users` | Pessoas. `username` = e-mail nesta instalação | V1 |
+| `users` | Pessoas. `username` = e-mail. `auth_provider` LOCAL/KEYCLOAK e `external_subject` (V16); conta SSO tem `password_hash` nulo | V1 |
 | `roles` | Papéis (`ROLE_ADMIN`, `ROLE_EDITOR`, `ROLE_REVIEWER`, `ROLE_VIEWER`) | V1 |
 | `permissions` | Permissões atômicas (`DOCUMENT_EDIT`, `REVIEW_APPROVE`…) | V1 |
 | `user_roles` | **Vários papéis por pessoa** | V2 |
@@ -124,7 +134,7 @@ não tem um "texto único". Consultas que fazem JOIN nessa tabela precisam de
 
 | Tabela | Papel | Migração |
 |---|---|---|
-| `review_requests` | Pedido de aprovação de uma versão | V1 |
+| `review_requests` | Pedido de aprovação de uma versão. `commit_id` (V16) fixa **qual**; aprovar torna-a vigente | V1 |
 | `reviews` | A decisão: aprovado ou rejeitado, com comentário | V1 |
 | `document_acknowledgements` | Ciência de leitura, por pessoa e versão (8.3.2 d) | V8 |
 | `external_documents` | Normas e manuais de terceiros (8.3.1) | V8 |
@@ -181,6 +191,7 @@ identificadores citados em auditoria. O serviço não expõe forma de alterá-la
 | **V13** | Reset de documentos, mantendo pessoas e configuração |
 | **V14** | O mesmo reset, agora que o semeador não o desfaz |
 | **V15** | Permissão de criar documento e idioma por conta |
+| **V16** | Rascunho de trabalho (`commits.is_draft`), versão exata no pedido de revisão, contas SSO, remoção de `ref_count`, índices em falta |
 
 ### Uma nota sobre a V15 e os papéis
 
@@ -243,10 +254,16 @@ SELECT pg_size_pretty(SUM(stored_bytes))  AS armazenado,
        COUNT(*)                           AS blobs
   FROM file_blobs;
 
--- Blobs órfãos (o coletor ainda não é agendado — ver MELHORIAS-FUTURAS.md)
+-- Blobs órfãos (o coletor corre às 03:30 com 24 h de carência; a tela
+-- Configurações → Armazenamento mostra o mesmo número e permite limpar agora)
 SELECT COUNT(*), pg_size_pretty(SUM(size_bytes))
   FROM file_blobs b
  WHERE NOT EXISTS (SELECT 1 FROM project_files p WHERE p.blob_sha256 = b.sha256);
+
+-- Documentos com alterações em andamento (rascunho aberto)
+SELECT d.code, c.created_at AS rascunho_desde, u.full_name
+  FROM commits c JOIN documents d ON d.id = c.document_id JOIN users u ON u.id = c.author_id
+ WHERE c.is_draft;
 
 -- Quem enxerga um documento restrito
 SELECT COALESCE(g.name, u.full_name) AS quem,

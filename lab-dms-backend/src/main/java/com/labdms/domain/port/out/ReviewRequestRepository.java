@@ -21,4 +21,7 @@ public interface ReviewRequestRepository {
     List<ReviewRequest> findByStatus(ReviewRequestStatus status);
 
     Optional<ReviewRequest> findBySourceBranchIdAndStatus(UUID sourceBranchId, ReviewRequestStatus status);
+
+    /** The request awaiting a decision for this document, if any. */
+    Optional<ReviewRequest> findOpenByDocumentId(UUID documentId);
 }

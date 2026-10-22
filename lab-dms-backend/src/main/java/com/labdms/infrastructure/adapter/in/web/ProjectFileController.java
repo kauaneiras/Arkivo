@@ -1,11 +1,13 @@
 package com.labdms.infrastructure.adapter.in.web;
 
-import com.labdms.application.service.AccessControlService;
+import com.labdms.application.service.DiffService;
 import com.labdms.application.service.DocumentService;
+import com.labdms.application.service.DocumentVisibilityService;
 import com.labdms.application.service.ProjectFileService;
 import com.labdms.application.service.ProjectImportService;
+import com.labdms.application.service.VersioningService;
+import com.labdms.domain.exception.UnauthorizedAccessException;
 import com.labdms.domain.model.audit.AuditEntry;
-import com.labdms.domain.model.document.Document;
 import com.labdms.domain.port.out.AuditLogPort;
 import com.labdms.infrastructure.adapter.out.storage.BlobStore;
 import com.labdms.infrastructure.security.UserPrincipal;
@@ -21,9 +23,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -33,13 +36,13 @@ import java.util.zip.ZipOutputStream;
 /**
  * The file tree of a project version — the Overleaf-equivalent surface.
  *
- * <p>Everything here operates on a specific commit, because a version is a
- * complete tree. Editing writes into the document's working commit; saving a
- * version freezes it and starts a new one.
+ * <p>Reads address any version. Writes never choose a version: the server
+ * resolves the working draft (opening one when needed) and the write lands
+ * there, so a closed version can never be edited through this surface.
  */
 @RestController
 @RequestMapping("/api/v1/documents/{documentId}/files")
-@Tag(name = "Project files", description = "Multi-file LaTeX projects: tree, upload, ZIP import/export")
+@Tag(name = "Project files", description = "Multi-file LaTeX projects: tree, upload, ZIP import/export, diffs")
 public class ProjectFileController {
 
     private final JdbcTemplate jdbcTemplate;
@@ -47,26 +50,28 @@ public class ProjectFileController {
     private final ProjectImportService importService;
     private final BlobStore blobStore;
     private final DocumentService documentService;
-    private final AccessControlService accessControl;
     private final AuditLogPort auditLog;
-    private final com.labdms.application.service.DocumentVisibilityService visibility;
-    private final com.labdms.domain.port.in.CommitDocumentUseCase commitUseCase;
+    private final DocumentVisibilityService visibility;
+    private final VersioningService versioning;
+    private final DiffService diffs;
+    private final com.labdms.application.service.AccessControlService accessControl;
 
     public ProjectFileController(JdbcTemplate jdbcTemplate, ProjectFileService projectFiles,
                                   ProjectImportService importService, BlobStore blobStore,
-                                  DocumentService documentService, AccessControlService accessControl,
-                                  AuditLogPort auditLog,
-                                  com.labdms.application.service.DocumentVisibilityService visibility,
-                                  com.labdms.domain.port.in.CommitDocumentUseCase commitUseCase) {
+                                  DocumentService documentService, AuditLogPort auditLog,
+                                  DocumentVisibilityService visibility,
+                                  VersioningService versioning, DiffService diffs,
+                                  com.labdms.application.service.AccessControlService accessControl) {
         this.jdbcTemplate = jdbcTemplate;
         this.projectFiles = projectFiles;
         this.importService = importService;
         this.blobStore = blobStore;
         this.documentService = documentService;
-        this.accessControl = accessControl;
         this.auditLog = auditLog;
         this.visibility = visibility;
-        this.commitUseCase = commitUseCase;
+        this.versioning = versioning;
+        this.diffs = diffs;
+        this.accessControl = accessControl;
     }
 
     public record FileNodeDto(String path, long sizeBytes, boolean isText, String contentType,
@@ -74,21 +79,76 @@ public class ProjectFileController {
 
     public record FileContentDto(String path, String content, boolean isText) {}
 
+    /**
+     * Result of an import — or its preview, in dry-run mode.
+     *
+     * <p>{@code preview} is filled only in a dry run: what the ZIP WOULD do to
+     * the current tree, with per-file line diffs for the text files so the
+     * confirmation dialog is self-contained. {@code workingCommit} tells the
+     * editor which version the files landed in.
+     */
     public record ImportResultDto(int filesImported, int filesSkipped, long totalBytes,
-                                   String rootPath, List<String> rootCandidates) {}
+                                   String rootPath, List<String> rootCandidates,
+                                   DiffService.TreeDiff preview,
+                                   Map<String, DiffService.FileDiff> previewDiffs,
+                                   UUID workingCommit) {}
+
+    /* ------------------------ compare two versions ------------------------ */
+
+    /**
+     * Compares the file trees of two versions, file by file.
+     *
+     * <p>Without {@code from}, the base is the version's parent — the natural
+     * question when looking at a version in the history. With {@code to}
+     * omitted the target is the document's current version, so
+     * {@code ?from=<official>} answers "what is being proposed".
+     */
+    @GetMapping("/diff")
+    @Operation(summary = "Compare the file trees of two versions (status and +/- per file)")
+    public ResponseEntity<DiffService.TreeDiff> diff(
+            @PathVariable UUID documentId,
+            @RequestParam(required = false) UUID from,
+            @RequestParam(required = false) UUID to,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        assertCanRead(documentId, principal);
+        UUID target = commitToRead(documentId, to);
+        UUID base = from != null ? commitToRead(documentId, from) : parentOf(target);
+        return ResponseEntity.ok(diffs.compareCommits(base, target));
+    }
+
+    @GetMapping("/diff/file")
+    @Operation(summary = "Line diff of one text file between two versions")
+    public ResponseEntity<DiffService.FileDiff> fileDiff(
+            @PathVariable UUID documentId,
+            @RequestParam String path,
+            @RequestParam(required = false) UUID from,
+            @RequestParam(required = false) UUID to,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        assertCanRead(documentId, principal);
+        UUID target = commitToRead(documentId, to);
+        UUID base = from != null ? commitToRead(documentId, from) : parentOf(target);
+        return ResponseEntity.ok(diffs.fileDiff(base, target, ProjectFileService.normalisePath(path)));
+    }
+
+    private UUID parentOf(UUID commitId) {
+        List<UUID> rows = jdbcTemplate.queryForList(
+                "SELECT parent_commit_id FROM commits WHERE id = ?", UUID.class, commitId);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
 
     /* -------------------------------- read -------------------------------- */
 
     @GetMapping
     @Operation(summary = "List the project's file tree for a version",
-               description = "Defaults to the version in force; pass commitId to inspect another.")
+               description = "Defaults to the current version; pass commitId to inspect another.")
     public ResponseEntity<List<FileNodeDto>> tree(
             @PathVariable UUID documentId,
             @RequestParam(required = false) UUID commitId,
             @AuthenticationPrincipal UserPrincipal principal) {
 
         assertCanRead(documentId, principal);
-
         UUID target = commitToRead(documentId, commitId);
         return ResponseEntity.ok(projectFiles.listFiles(target).stream()
                 .map(f -> new FileNodeDto(f.path(), f.sizeBytes(), f.isText(),
@@ -105,7 +165,6 @@ public class ProjectFileController {
             @AuthenticationPrincipal UserPrincipal principal) {
 
         assertCanRead(documentId, principal);
-
         UUID target = commitToRead(documentId, commitId);
         return ResponseEntity.ok(new FileContentDto(path,
                 projectFiles.readTextFile(target, path), true));
@@ -121,15 +180,13 @@ public class ProjectFileController {
             @AuthenticationPrincipal UserPrincipal principal) {
 
         assertCanRead(documentId, principal);
-
         UUID target = commitToRead(documentId, commitId);
         byte[] bytes = projectFiles.readBinaryFile(target, path);
 
         // Only formats a browser cannot be tricked into executing may render
         // inline. An SVG is an XML document that can carry <script>, so serving
         // an uploaded one as image/svg+xml on this origin turns a project file
-        // into stored XSS against every user who previews it. Anything else is
-        // sent as an opaque download with a neutral type.
+        // into stored XSS against every user who previews it.
         String guessed = ProjectImportService.guessContentType(path);
         boolean inlineSafe = guessed.equals("image/png") || guessed.equals("image/jpeg")
                 || guessed.equals("image/gif") || guessed.equals("application/pdf");
@@ -141,7 +198,6 @@ public class ProjectFileController {
         headers.add(HttpHeaders.CONTENT_DISPOSITION,
                 (inlineSafe ? "inline" : "attachment") + "; filename=\""
                         + fileNameOf(path).replace("\"", "") + "\"");
-        // Stops a browser from second-guessing the type we just declared.
         headers.add("X-Content-Type-Options", "nosniff");
         headers.add("Content-Security-Policy", "default-src 'none'; sandbox");
 
@@ -158,27 +214,23 @@ public class ProjectFileController {
     public record SaveFileRequest(String path, String content) {}
 
     @PutMapping("/content")
-    @Operation(summary = "Create or overwrite a text file")
+    @Operation(summary = "Create or overwrite a text file in the working draft")
     public ResponseEntity<FileNodeDto> saveText(
             @PathVariable UUID documentId,
             @RequestBody SaveFileRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        UUID commit = assertCanEditAndGetCommit(documentId, principal);
+        UUID commit = workingCommit(documentId, principal);
         byte[] bytes = request.content().getBytes(StandardCharsets.UTF_8);
-        assertFitsInProject(documentId, commit, request.path(), bytes.length);
+        assertFitsInProject(commit, request.path(), bytes.length);
 
         projectFiles.putFile(commit, request.path(), bytes,
                 ProjectImportService.guessContentType(request.path()), false);
         refreshProjectSize(documentId, commit);
 
-        // Diz em que versão a escrita entrou.
-        //
-        // O cliente não envia o commit — o servidor é que escolhe qual é
-        // editável. Quando essa escolha ABRE uma revisão nova (primeira edição
-        // depois de uma aprovação), o editor continuaria a apontar para a
-        // anterior e a pré-visualizar a árvore errada. Devolver o identificador
-        // deixa-o seguir, sem lhe dar o poder de o escolher.
+        // Which version the write landed in. The client never chooses it, but
+        // when the write OPENED a draft the editor must follow, or it keeps
+        // previewing the tree it was opened on.
         return ResponseEntity.ok()
                 .header("X-Working-Commit", commit.toString())
                 .header("Access-Control-Expose-Headers", "X-Working-Commit")
@@ -188,7 +240,7 @@ public class ProjectFileController {
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Upload a file into the project (image, PDF, .tex...)",
+    @Operation(summary = "Upload a file into the working draft (image, PDF, .tex...)",
                description = "EPS is converted to PDF on the server, so shell-escape stays disabled.")
     public ResponseEntity<FileNodeDto> upload(
             @PathVariable UUID documentId,
@@ -196,7 +248,7 @@ public class ProjectFileController {
             @RequestParam(required = false) String folder,
             @AuthenticationPrincipal UserPrincipal principal) throws Exception {
 
-        UUID commit = assertCanEditAndGetCommit(documentId, principal);
+        UUID commit = workingCommit(documentId, principal);
 
         if (file.isEmpty()) throw new IllegalArgumentException("Empty file");
         if (file.getSize() > ProjectImportService.MAX_FILE_BYTES) {
@@ -207,7 +259,7 @@ public class ProjectFileController {
         String name = file.getOriginalFilename() == null ? "arquivo" : file.getOriginalFilename();
         String path = (folder == null || folder.isBlank() ? "" : folder.replaceAll("/+$", "") + "/") + name;
         byte[] content = file.getBytes();
-        assertFitsInProject(documentId, commit, path, content.length);
+        assertFitsInProject(commit, path, content.length);
 
         String contentType = ProjectImportService.guessContentType(path);
         String derivedFrom = null;
@@ -226,38 +278,43 @@ public class ProjectFileController {
         audit(principal.getId(), "PROJECT_FILE_UPLOADED", documentId, Map.of("path", path));
 
         return ResponseEntity.status(HttpStatus.CREATED)
+                .header("X-Working-Commit", commit.toString())
+                .header("Access-Control-Expose-Headers", "X-Working-Commit")
                 .body(new FileNodeDto(path, content.length, false, contentType, false, derivedFrom));
     }
 
     public record RenameRequest(String from, String to) {}
 
     @PostMapping("/rename")
-    @Operation(summary = "Rename or move a file or folder")
+    @Operation(summary = "Rename or move a file or folder in the working draft")
     public ResponseEntity<Map<String, Object>> rename(
             @PathVariable UUID documentId,
             @RequestBody RenameRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        UUID commit = assertCanEditAndGetCommit(documentId, principal);
+        UUID commit = workingCommit(documentId, principal);
         int affected = projectFiles.renamePath(commit, request.from(), request.to());
         if (affected == 0) throw new IllegalArgumentException("Path not found: " + request.from());
         audit(principal.getId(), "PROJECT_FILE_RENAMED", documentId,
                 Map.of("from", request.from(), "to", request.to()));
-        return ResponseEntity.ok(Map.of("affected", affected));
+        return ResponseEntity.ok(Map.of("affected", affected, "workingCommit", commit));
     }
 
     @DeleteMapping
-    @Operation(summary = "Delete a file from the project")
+    @Operation(summary = "Delete a file from the working draft")
     public ResponseEntity<Void> delete(
             @PathVariable UUID documentId,
             @RequestParam String path,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        UUID commit = assertCanEditAndGetCommit(documentId, principal);
+        UUID commit = workingCommit(documentId, principal);
         projectFiles.deleteFile(commit, path);
         refreshProjectSize(documentId, commit);
         audit(principal.getId(), "PROJECT_FILE_DELETED", documentId, Map.of("path", path));
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.noContent()
+                .header("X-Working-Commit", commit.toString())
+                .header("Access-Control-Expose-Headers", "X-Working-Commit")
+                .build();
     }
 
     @PostMapping("/root")
@@ -269,29 +326,72 @@ public class ProjectFileController {
             @RequestParam String path,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        UUID commit = assertCanEditAndGetCommit(documentId, principal);
+        UUID commit = workingCommit(documentId, principal);
         projectFiles.setRoot(commit, path);
         jdbcTemplate.update("UPDATE documents SET root_file_path = ? WHERE id = ?", path, documentId);
         audit(principal.getId(), "PROJECT_ROOT_CHANGED", documentId, Map.of("path", path));
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok()
+                .header("X-Working-Commit", commit.toString())
+                .header("Access-Control-Expose-Headers", "X-Working-Commit")
+                .build();
     }
 
     /* ------------------------------ ZIP in/out ----------------------------- */
 
+    /** Above this many bytes of hunks the preview stops attaching line diffs. */
+    private static final int MAX_PREVIEW_DIFF_LINES = 4000;
+
     @PostMapping(value = "/import-zip", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Import an Overleaf ZIP export",
-               description = "Replaces the project's file tree. Build artefacts are skipped and "
-                           + "EPS figures are converted to PDF.")
+    @Operation(summary = "Import an Overleaf ZIP export into the working draft",
+               description = "Replaces the draft's file tree. Build artefacts are skipped and EPS "
+                           + "figures are converted to PDF. With dryRun=true nothing is written: the "
+                           + "response describes what the ZIP would change, file by file.")
     public ResponseEntity<ImportResultDto> importZip(
             @PathVariable UUID documentId,
             @RequestParam("file") MultipartFile file,
             @RequestParam(required = false) String rootPath,
+            @RequestParam(required = false) Boolean dryRun,
             @AuthenticationPrincipal UserPrincipal principal) throws Exception {
 
-        UUID commit = assertCanEditAndGetCommit(documentId, principal);
+        // A ZIP replaces the whole tree, and what is not in it ceases to exist.
+        // Exporting the wrong folder deletes chapters, and the mistake surfaces
+        // weeks later when somebody looks for the file. Seeing the list first,
+        // removals highlighted, turns a silent accident into a decision.
+        if (Boolean.TRUE.equals(dryRun)) {
+            // A dry run stores the ZIP's blobs so the preview can diff them, so
+            // it is gated like a write — the tree is not touched, but a reader
+            // could otherwise fill the blob store with previews.
+            accessControl.assertCanEdit(principal.getId(), documentService.findById(documentId));
+            var ensaio = importService.importZip(file.getBytes(), rootPath);
+            UUID atual = currentCommit(documentId);
 
-        // Paths and root come back already stripped of the wrapper folder, so
-        // the root that is reported is one that actually exists in the tree.
+            Map<String, DiffService.Entry> candidate = new LinkedHashMap<>();
+            ensaio.files().forEach(f -> candidate.put(ProjectFileService.normalisePath(f.path()),
+                    new DiffService.Entry(f.sha256(), f.sizeBytes(), f.isText())));
+            DiffService.TreeDiff preview = diffs.compareWithCandidate(atual, candidate);
+
+            // Line diffs for the changed text files, so the dialog can show them
+            // without a second request (the candidate tree exists nowhere else).
+            Map<String, DiffService.Entry> before = new LinkedHashMap<>();
+            projectFiles.listFiles(atual).forEach(f -> before.put(f.path(),
+                    new DiffService.Entry(f.sha256(), f.sizeBytes(), f.isText())));
+            Map<String, DiffService.FileDiff> previewDiffs = new LinkedHashMap<>();
+            int budget = MAX_PREVIEW_DIFF_LINES;
+            for (var change : preview.changes()) {
+                if (!change.isText() || change.status() == DiffService.Status.UNCHANGED) continue;
+                if (budget <= 0) break;
+                var fd = diffs.fileDiff(before.get(change.path()), candidate.get(change.path()), change.path());
+                previewDiffs.put(change.path(), fd);
+                budget -= fd.hunks().stream().mapToInt(h -> h.lines().size()).sum();
+            }
+
+            return ResponseEntity.ok(new ImportResultDto(ensaio.files().size(), ensaio.skipped(),
+                    ensaio.totalBytes(), ensaio.rootPath(), ensaio.rootCandidates(),
+                    preview, previewDiffs, null));
+        }
+
+        UUID commit = workingCommit(documentId, principal);
+
         var imported = importService.importZip(file.getBytes(), rootPath);
         String root = imported.rootPath();
 
@@ -308,18 +408,16 @@ public class ProjectFileController {
                 Map.of("files", String.valueOf(stored), "root", root));
 
         return ResponseEntity.ok(new ImportResultDto(stored, imported.skipped(),
-                imported.totalBytes(), root, imported.rootCandidates()));
+                imported.totalBytes(), root, imported.rootCandidates(), null, null, commit));
     }
 
     /**
      * The wrapper that turns an uploaded PDF into a compilable document.
      *
      * <p>Many controlled documents are not written here — a supplier manual, a
-     * scanned calibration certificate, a form produced in Word. They still need
-     * versions, review, approval and an obsolete watermark. Rather than build a
-     * second pipeline for "PDF documents", the PDF becomes a file in the project
-     * and this one-page root includes it. Everything downstream — compiling,
-     * versioning, the tree, the 8.3.2 f) watermark — then works unchanged.
+     * scanned calibration certificate. The PDF becomes a file in the project
+     * and this one-page root includes it, so versions, review, approval and the
+     * 8.3.2 f) watermark all work unchanged.
      */
     private static String pdfWrapperSource(String pdfPath) {
         return """
@@ -334,7 +432,7 @@ public class ProjectFileController {
                 """.replace("__PDF__", pdfPath);
     }
 
-    public static final String PDF_WRAPPER_ROOT = "main.tex";
+    public static final String PDF_WRAPPER_ROOT = ProjectFileService.DEFAULT_ROOT;
 
     @PostMapping(value = "/import-pdf", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Use an uploaded PDF as the document's content",
@@ -345,13 +443,10 @@ public class ProjectFileController {
             @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal UserPrincipal principal) throws Exception {
 
-        UUID commit = assertCanEditAndGetCommit(documentId, principal);
+        UUID commit = workingCommit(documentId, principal);
 
         byte[] bytes = file.getBytes();
         if (bytes.length < 5 || bytes[0] != '%' || bytes[1] != 'P' || bytes[2] != 'D' || bytes[3] != 'F') {
-            // Trusting the extension would let a renamed file through to the
-            // compiler, where the failure is a wall of TeX log instead of a
-            // sentence the user can act on.
             throw new IllegalArgumentException("This file is not a PDF.");
         }
         if (bytes.length > ProjectImportService.MAX_FILE_BYTES) {
@@ -380,58 +475,56 @@ public class ProjectFileController {
         audit(principal.getId(), "PROJECT_PDF_IMPORTED", documentId, Map.of("path", pdfPath));
 
         return ResponseEntity.ok(new ImportResultDto(stored, 0, bytes.length,
-                PDF_WRAPPER_ROOT, List.of(PDF_WRAPPER_ROOT)));
+                PDF_WRAPPER_ROOT, List.of(PDF_WRAPPER_ROOT), null, null, commit));
     }
 
+    /**
+     * Streams the project as a ZIP, one entry at a time.
+     *
+     * <p>Previously the whole archive was assembled in memory; at the 200 MB
+     * project ceiling a handful of simultaneous exports held the heap hostage.
+     */
     @GetMapping(value = "/export-zip", produces = "application/zip")
     @Operation(summary = "Export the project as a ZIP, the same shape Overleaf produces")
-    public ResponseEntity<Resource> exportZip(
+    public ResponseEntity<StreamingResponseBody> exportZip(
             @PathVariable UUID documentId,
             @RequestParam(required = false) UUID commitId,
-            @AuthenticationPrincipal UserPrincipal principal) throws Exception {
+            @AuthenticationPrincipal UserPrincipal principal) {
 
         assertCanRead(documentId, principal);
-
         UUID target = commitToRead(documentId, commitId);
         var files = projectFiles.listFiles(target);
-
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        try (ZipOutputStream zip = new ZipOutputStream(out)) {
-            for (var f : files) {
-                zip.putNextEntry(new ZipEntry(f.path()));
-                zip.write(blobStore.read(f.sha256()));
-                zip.closeEntry();
-            }
-        }
-        byte[] bytes = out.toByteArray();
         String fileName = documentService.findById(documentId).getCode().value() + ".zip";
 
+        StreamingResponseBody body = out -> {
+            try (ZipOutputStream zip = new ZipOutputStream(out)) {
+                for (var f : files) {
+                    zip.putNextEntry(new ZipEntry(f.path()));
+                    zip.write(blobStore.read(f.sha256()));
+                    zip.closeEntry();
+                }
+            }
+        };
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
-                .contentLength(bytes.length)
-                .body(new ByteArrayResource(bytes));
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .body(body);
     }
 
     /* ------------------------------- helpers ------------------------------- */
 
-    /**
-     * Resolves which version to read, binding a caller-supplied commit to the
-     * document in the path.
-     *
-     * <p>Authorisation is checked against the document in the URL, but the files
-     * were then read from whatever {@code commitId} the caller passed in the
-     * query string. Those are two different objects: a user could authorise
-     * against a document they legitimately own and read the tree of a document
-     * in a group closed to them. Every read goes through here so the id that was
-     * authorised and the id that is read are always the same document.
-     */
-    /** One read rule for the whole file surface: tree, content, raw and export. */
+    /** One read rule for the whole file surface: tree, content, raw, diff and export. */
     private void assertCanRead(UUID documentId, UserPrincipal principal) {
-        if (!visibility.canRead(principal.getId(), documentId)) {
-            throw new com.labdms.domain.exception.UnauthorizedAccessException("view");
+        if (!visibility.canRead(principal == null ? null : principal.getId(), documentId)) {
+            throw new UnauthorizedAccessException("view");
         }
     }
 
+    /**
+     * Resolves which version to read, binding a caller-supplied commit to the
+     * document in the path so the id that was authorised and the id that is
+     * read are always the same document.
+     */
     private UUID commitToRead(UUID documentId, UUID requestedCommitId) {
         if (requestedCommitId == null) return currentCommit(documentId);
         List<UUID> owner = jdbcTemplate.queryForList(
@@ -443,9 +536,6 @@ public class ProjectFileController {
     }
 
     private UUID currentCommit(UUID documentId) {
-        // queryForList, not queryForObject: the latter throws
-        // EmptyResultDataAccessException when the query returns NO row, which
-        // would turn a missing document into a 500 instead of a clean error.
         List<UUID> rows = jdbcTemplate.queryForList(
                 "SELECT COALESCE(current_commit_id, official_commit_id) FROM documents WHERE id = ?",
                 UUID.class, documentId);
@@ -454,101 +544,19 @@ public class ProjectFileController {
         return commit;
     }
 
-    private UUID assertCanEditAndGetCommit(UUID documentId, UserPrincipal principal) {
-        Document doc = documentService.findById(documentId);
-        accessControl.assertCanEdit(principal.getId(), doc);
-        if (doc.getStatus() == com.labdms.domain.model.document.DocumentStatus.IN_REVIEW
-                || doc.getStatus() == com.labdms.domain.model.document.DocumentStatus.OBSOLETE) {
-            throw new IllegalStateException("This document is locked for editing (" + doc.getStatus() + ")");
-        }
-
-        UUID commit = currentCommit(documentId);
-
-        // The revision in force is a quality record, not a working copy. Once a
-        // revision is approved, current_commit_id and official_commit_id point at
-        // the SAME commit, so writing to "the current commit" was writing into the
-        // approved record: files changed with no new version, no review, no change
-        // reason and no diff — while commits.sha256_hash still described the old
-        // content. ISO/IEC 17025 8.3.2 exists to prevent exactly that.
-        //
-        // Editing is not blocked, only editing IN PLACE: the user saves a new
-        // version (which copies the tree) and edits that.
-        //
-        // The status check matters as much as the pointer check. A brand new
-        // document is created with current_commit_id == official_commit_id, so
-        // testing the pointer alone refused the very first upload into a
-        // document that had just been created — the user could not import their
-        // Overleaf ZIP until they had saved a second version, for no reason.
-        // What must not be rewritten is an APPROVED record; a draft has never
-        // been approved, and editing it is ordinary work.
-        if (doc.getStatus() == com.labdms.domain.model.document.DocumentStatus.ACTIVE
-                && commit.equals(doc.getOfficialCommitId())) {
-            return openWorkingRevision(documentId, principal.getId(), doc.getOfficialCommitId());
-        }
-        return commit;
-    }
-
     /**
-     * Abre uma revisão de trabalho a partir da versão em vigor.
+     * The commit every write goes to: the working draft, opened on demand.
      *
-     * <p>Isto respondia 409 com "salve uma nova versão e edite os arquivos dela"
-     * — um conselho impossível de seguir. Gravar uma versão começa por escrever
-     * o ficheiro aberto na árvore, e era precisamente essa escrita que estava a
-     * ser recusada: para gravar era preciso escrever, e para escrever era
-     * preciso ter gravado. O editor ficava trancado num círculo, e a mensagem
-     * mandava o utilizador pela porta fechada.
-     *
-     * <p>A regra que a trava protege continua inteira: a revisão aprovada não é
-     * tocada. O que muda é que a primeira alteração deixa de ser recusada e
-     * passa a fazer o que a mensagem pedia — criar a nova revisão, copiando a
-     * árvore — e a escrita entra nessa. É o que "editar um documento aprovado"
-     * significa num sistema versionado: não se altera o que foi aprovado,
-     * começa-se o próximo.
-     *
-     * <p>Acontece uma vez por ciclo: a partir daqui a versão atual já não é a
-     * vigente, e as alterações seguintes vão todas para o mesmo rascunho, sem
-     * criar versão nenhuma.
+     * <p>Authorisation, the lock on documents in review and the "never rewrite
+     * a closed version" rule all live in the versioning service, so this
+     * controller cannot get them wrong.
      */
-    private UUID openWorkingRevision(UUID documentId, UUID userId, UUID officialCommitId) {
-        List<UUID> branch = jdbcTemplate.queryForList(
-                "SELECT id FROM branches WHERE document_id = ? AND is_default = true",
-                UUID.class, documentId);
-        if (branch.isEmpty()) {
-            throw new IllegalStateException("This document has no default branch");
-        }
-
-        // O texto da raiz vem da versão em vigor. Num projeto multi-ficheiro o
-        // serviço relê-o da árvore e ignora este valor; num documento de
-        // ficheiro único é ele que forma o conteúdo da nova versão.
-        List<String> source = jdbcTemplate.queryForList("""
-                SELECT s.latex_source FROM content_snapshots s
-                  JOIN commits c ON c.content_snapshot_id = s.id
-                 WHERE c.id = ?
-                """, String.class, officialCommitId);
-
-        var created = commitUseCase.execute(new com.labdms.application.dto.command.CommitDocumentCommand(
-                userId, documentId, branch.get(0),
-                source.isEmpty() ? null : source.get(0),
-                "Nova revisão aberta para edição"));
-
-        jdbcTemplate.update("UPDATE commits SET change_reason = ? WHERE id = ?",
-                "Revisão iniciada a partir da versão em vigor.", created.getId());
-
-        // Fica registado que uma revisão nasceu de uma edição, e não de alguém a
-        // carregar em "Salvar Versão": numa auditoria, uma versão sem origem
-        // explicada é uma pergunta.
-        audit(userId, "WORKING_REVISION_OPENED", documentId,
-                Map.of("commitId", created.getId().toString(),
-                       "fromOfficial", String.valueOf(officialCommitId)));
-
-        return created.getId();
+    private UUID workingCommit(UUID documentId, UserPrincipal principal) {
+        return versioning.openWorkingRevision(documentId, principal.getId());
     }
 
     /** Enforces the per-project ceiling, discounting the file being replaced. */
-    private void assertFitsInProject(UUID documentId, UUID commit, String path, long incoming) {
-        // A NEW file has no row at all, and COALESCE does not help with zero
-        // rows — only with a NULL value. queryForObject would throw here on
-        // every first upload of a file, which is the normal case.
+    private void assertFitsInProject(UUID commit, String path, long incoming) {
         List<Long> rows = jdbcTemplate.queryForList(
                 "SELECT size_bytes FROM project_files WHERE commit_id = ? AND path = ?",
                 Long.class, commit, ProjectFileService.normalisePath(path));
@@ -562,7 +570,7 @@ public class ProjectFileController {
     }
 
     private void refreshProjectSize(UUID documentId, UUID commit) {
-        jdbcTemplate.update("UPDATE documents SET project_size_bytes = ? WHERE id = ?",
+        jdbcTemplate.update("UPDATE documents SET project_size_bytes = ?, updated_at = NOW() WHERE id = ?",
                 projectFiles.totalSize(commit), documentId);
     }
 

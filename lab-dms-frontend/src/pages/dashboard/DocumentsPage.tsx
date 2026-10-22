@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
 import VisibilityModal from '../../components/VisibilityModal';
-import { Plus, Search, Edit3, Eye, Archive, FileText, History, AlertTriangle, Download, CalendarClock, Globe, Building2, Lock } from 'lucide-react';
+import { Plus, Search, Edit3, Eye, Archive, FileText, History, AlertTriangle, Download, CalendarClock, Globe, Building2, Lock, GitBranch } from 'lucide-react';
 import CreateDocumentModal from './CreateDocumentModal';
 import { useI18n, formatDate } from '../../lib/i18n';
 import { DocStatusBadge, ConfirmModal, EmptyState, TableSkeleton, useToast } from '../../components/ui';
@@ -10,7 +10,6 @@ import { useAuthStore } from '../../store/authStore';
 import { cn } from '../../lib/utils';
 import { porqueNaoPodeEditar } from '../../lib/permissoes';
 
-const DOC_TYPES = ['IT', 'PQ', 'PO', 'MQ'];
 const DOC_STATUSES = ['DRAFT', 'IN_REVIEW', 'ACTIVE', 'OBSOLETE'];
 
 export default function DocumentsPage() {
@@ -29,6 +28,7 @@ export default function DocumentsPage() {
   const [authorFilter, setAuthorFilter] = useState('');
   const [reviewerFilter, setReviewerFilter] = useState('');
   const [people, setPeople] = useState<any[]>([]);
+  const [docTypes, setDocTypes] = useState<string[]>([]);
   const [reviewers, setReviewers] = useState<any[]>([]);
   const [obsoleteTarget, setObsoleteTarget] = useState<any | null>(null);
   const [obsoleting, setObsoleting] = useState(false);
@@ -67,10 +67,19 @@ export default function DocumentsPage() {
     api.get('/users/reviewers')
       .then((res) => setReviewers(res.data))
       .catch(() => setReviewers([]));
-    api.get('/users?status=ACTIVE')
-      .then((res) => setPeople(res.data))
-      .catch(() => setPeople([]));
-  }, []);
+    // The full directory is admin-only; asking for it as an editor only put a
+    // 403 in the console on every visit. Non-admins get the fallback below.
+    if (user?.roles?.includes('ROLE_ADMIN')) {
+      api.get('/users?status=ACTIVE')
+        .then((res) => setPeople(res.data))
+        .catch(() => setPeople([]));
+    }
+    // The types a laboratory uses are its own (Settings → Document types), so
+    // the filter lists those instead of the four that were hardcoded here.
+    api.get('/document-types')
+      .then((res) => setDocTypes((res.data ?? []).map((d: any) => d.prefix)))
+      .catch(() => setDocTypes(['IT', 'PQ', 'PO', 'MQ']));
+  }, [user?.roles]);
 
   const authorOptions = useMemo(() => {
     if (people.length > 0) return people;
@@ -177,7 +186,7 @@ export default function DocumentsPage() {
               onChange={(e) => setTypeFilter(e.target.value)}
             >
               <option value="">{t('docs.allTypes')}</option>
-              {DOC_TYPES.map((type) => (
+              {docTypes.map((type) => (
                 <option key={type} value={type}>{type}</option>
               ))}
             </select>
@@ -214,16 +223,17 @@ export default function DocumentsPage() {
                 <th className="px-6 py-4">{t('docs.status')}</th>
                 <th className="px-6 py-4">{t('docs.author')}</th>
                 <th className="px-6 py-4">{t('docs.reviewer')}</th>
+                <th className="px-6 py-4">{t('docs.versions')}</th>
                 <th className="px-6 py-4">{t('docs.updatedAt')}</th>
                 <th className="px-6 py-4 text-right">{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-borderLight">
               {loading ? (
-                <TableSkeleton cols={8} />
+                <TableSkeleton cols={9} />
               ) : documents.length === 0 ? (
                 <tr>
-                  <td colSpan={8}>
+                  <td colSpan={9}>
                     <EmptyState
                       icon={<FileText className="w-10 h-10 mb-3 opacity-40" />}
                       message={t('docs.empty')}
@@ -253,11 +263,21 @@ export default function DocumentsPage() {
                             <CalendarClock className="w-3.5 h-3.5 text-red-600" />
                           </span>
                         )}
+                        {doc.hasDraft && (
+                          // Work in progress that is not a version yet — answers
+                          // "where did my edits go" without opening the document.
+                          <span title={t('docs.hasDraft')}>
+                            <GitBranch className="w-3.5 h-3.5 text-amber-600" />
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 text-textMuted whitespace-nowrap">{doc.authorName || '—'}</td>
                     <td className="px-6 py-4 text-textMuted whitespace-nowrap">
                       {doc.reviewerName || t('docs.noReviewer')}
+                    </td>
+                    <td className="px-6 py-4 text-textMuted whitespace-nowrap tabular-nums">
+                      {typeof doc.versionCount === 'number' ? `v${doc.versionCount}` : '—'}
                     </td>
                     <td className="px-6 py-4 text-textMuted whitespace-nowrap">
                       {doc.updatedAt ? formatDate(doc.updatedAt, lang) : '—'}

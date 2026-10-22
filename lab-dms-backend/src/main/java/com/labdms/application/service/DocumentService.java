@@ -38,6 +38,7 @@ public class DocumentService implements CreateDocumentUseCase, SearchDocumentsUs
     private final AuditLogPort auditLogPort;
     private final NotificationService notificationService;
     private final DocumentTypeService documentTypeService;
+    private final ProjectFileService projectFiles;
 
     public DocumentService(DocumentRepository documentRepository,
                            BranchRepository branchRepository,
@@ -46,7 +47,8 @@ public class DocumentService implements CreateDocumentUseCase, SearchDocumentsUs
                            AccessControlService accessControlService,
                            AuditLogPort auditLogPort,
                            NotificationService notificationService,
-                           DocumentTypeService documentTypeService) {
+                           DocumentTypeService documentTypeService,
+                           ProjectFileService projectFiles) {
         this.documentRepository = documentRepository;
         this.branchRepository = branchRepository;
         this.commitRepository = commitRepository;
@@ -55,6 +57,7 @@ public class DocumentService implements CreateDocumentUseCase, SearchDocumentsUs
         this.auditLogPort = auditLogPort;
         this.notificationService = notificationService;
         this.documentTypeService = documentTypeService;
+        this.projectFiles = projectFiles;
     }
 
     @Override
@@ -150,6 +153,15 @@ public class DocumentService implements CreateDocumentUseCase, SearchDocumentsUs
         Document savedDocument = documentRepository.save(document);
         branchRepository.save(mainBranch);
         commitRepository.save(initialCommit);
+
+        // Every document is a project from birth: the initial text becomes
+        // main.tex in the first version's tree. Before this, a document created
+        // from the blank template had no tree, its edits lived only in the
+        // editor buffer, and the draft mechanism — which is keyed on the tree —
+        // could not protect the first version from being edited in place.
+        projectFiles.putFile(initialCommit.getId(), ProjectFileService.DEFAULT_ROOT,
+                command.initialLatexSource().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                "text/x-tex", true);
 
         // Now that the commit exists, it can be declared the version in force.
         // A brand new document's only revision is also its current one.
@@ -275,6 +287,11 @@ public class DocumentService implements CreateDocumentUseCase, SearchDocumentsUs
                 .orElseThrow(() -> new IllegalArgumentException("Version not found: " + commitId));
         if (!documentId.equals(commit.getDocumentId())) {
             throw new IllegalArgumentException("That version belongs to another document");
+        }
+        if (commit.isDraft()) {
+            // Unsaved changes are not a version; what is in force must be a
+            // closed, immutable record with a message and a change reason.
+            throw new IllegalArgumentException("Unsaved changes cannot be put in force. Save the version first.");
         }
 
         java.util.UUID previous = document.getOfficialCommitId();
